@@ -30,7 +30,7 @@ export function ManyToOne(fkName: string) {
     }
     metadata[propKey][idKey] = true;
 
-    addInitializer(function () {
+    addInitializer(function() {
       let entity: any = undefined;
       Object.defineProperty(this, name, {
         get: () => entity,
@@ -64,10 +64,15 @@ export function ManyToOne(fkName: string) {
 
 // The receiving end of a ManyToOne relationship.
 export function OneToMany() {
-  return function dec(): void {
-    // No-op
-    // The corresponding ManyToOne should be responsible for persisting the data.
-  };
+  return function dec(): void { }
+  // return function dec(_value: any, { name, metadata }: any): void {
+  //   if (metadata[virtualKey] === undefined) {
+  //     metadata[virtualKey] = {};
+  //   }
+  //
+  //   // TODO: Can use the value here.
+  //   metadata[virtualKey][name] = true;
+  // };
 }
 
 export function Property() {
@@ -84,20 +89,23 @@ export function ClientModel(modelName: string) {
   let original: any = undefined;
 
   return function dec(target: any, { metadata }: any) {
-    const props = metadata[propKey];
+    const props = Object.keys(metadata[propKey]);
 
-    target.prototype._save = function (serverChange = false) {
+    target.prototype._save = function(serverChange = false) {
       let change: Change;
 
       if (original === undefined) {
-        const copyThis = JSON.parse(
-          JSON.stringify(this, (key, value) => {
-            if (key === "_pool") {
-              return undefined;
-            }
-            return value;
-          }),
-        );
+        const o = JSON.stringify(this, (k, value) => {
+          // Shallow
+          if (typeof value === "object" && k) {
+            return undefined;
+          }
+          // if (k === "_pool") {
+          //   return undefined;
+          // }
+          return value;
+        });
+        const copyThis = JSON.parse(o);
         change = {
           id: "1",
           type: "create",
@@ -106,9 +114,8 @@ export function ClientModel(modelName: string) {
         };
         original = copyThis;
       } else {
-        const properties = Object.keys(props);
         const changes: Record<string, { original: any; updated: any }> = {};
-        properties.forEach((property: any) => {
+        props.forEach((property: any) => {
           if (original[property] !== this[property]) {
             changes[property] = {
               original: original[property],
@@ -135,7 +142,7 @@ export function ClientModel(modelName: string) {
       }
     };
 
-    target.prototype.save = function () {
+    target.prototype.save = function() {
       this._save();
     };
   };
@@ -146,9 +153,9 @@ export class Model {
   @Property()
   id: string = uuid();
 
-  save(): void {}
+  save(): void { }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _save(_serverChange: boolean): void {}
+  _save(_serverChange: boolean): void { }
 
   // Internal
   _pool: ObjectPool;
@@ -156,7 +163,39 @@ export class Model {
   constructor() {
     // Connect to the singleton.
     this._pool = ObjectPool.getInstance();
-    this._pool.pool[this.id] = this;
+
+    // Add an object to the pool when it's constructed.
+    // This means that we should be calling the constructors in topological
+    // order.
+    // This makes sense as we program as if we want to create a reference to
+    // something that thing needs to exist before we assign the property.
+    this._pool.add(this);
+
+    /*
+      * An example of what this could look like is:
+      * Data:
+      *   {
+      *     "id": "123",
+      *     "__class": "User",
+      *     "name": "Paul",
+      *     "teamId": "asdflkjasdlfkj",
+        * },
+      *   {
+      *     "id": "asdflkjasdlfkj",
+      *     "__class": "Team",
+      *     "name": "My Team",
+      *   }
+      *
+      *  Then we do a top sort: [team, user]
+      *  Then for each one we call the respective constructor.
+      *  The class decorator should register the prototype with the
+      *  name.
+      *
+      * The class should then be initialized and save(true) should be called
+    *   at the end of the json initializer.
+      *   fromJson(obj)
+      *
+      */
   }
 }
 
