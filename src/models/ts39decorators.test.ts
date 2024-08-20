@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { expect, test } from "vitest";
 
-// const global = {};
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 
-export function Property() {
+function Property() {
   return function dec(_value: any, { name, metadata }: any) {
     metadata[name] = true;
   };
@@ -16,7 +15,6 @@ class User {
 }
 
 test("demo", () => {
-  console.log("STARTING");
   const u = new User();
   u.name = "Paul";
   u.name = "Bardea";
