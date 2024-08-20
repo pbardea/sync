@@ -4,13 +4,13 @@ import { ObjectPool, User, Team } from "./base";
 test("emits change txns", () => {
     const pool = ObjectPool.getInstance();
 
-    // const teamA = new Team();
-    // teamA.name = "Team A";
-    // teamA.save();
-
     pool.txns = [];
 
     // TODO: Figure out object creation.
+    // There should probably be a way to do this from
+    // the client and a bootstrap version? Same thing?
+    // Bootstrap events probably don't want to re-emit a bunch of
+    // create events to sync.
     const user = new User();
     user.name = "Paul";
     user.save();

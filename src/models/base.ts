@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-    import { uuid } from "uuidv4";
 
+// v4() should be used - this is deprecated.
+import { uuid } from "uuidv4";
+
+// TODO: Split this into several files.
 
 /* POOL */
     export type Change = { id: string } & (CreateChange | UpdateChange);
