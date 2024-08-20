@@ -70,4 +70,66 @@ test("emits change txns", () => {
         },
     });
     expect(teamA.members).toEqual([user]);
+
+    user.team = undefined;
+    expect(teamA.members).toEqual([]);
+    user.save();
+    expect(pool.txns[1]).toEqual({
+        id: "1",
+        type: "update",
+        modelClass: "User",
+        modelId: id,
+        changeSnapshot: {
+            changes: {
+                teamId: {
+                    original: teamA.id,
+                    updated: undefined,
+                },
+            },
+        },
+    });
+
+    const teamB = new Team();
+    expect(teamA.members).toEqual([]);
+    expect(teamB.members).toEqual([]);
+    user.team = teamB;
+    expect(teamA.members).toEqual([]);
+    expect(teamB.members).toEqual([user]);
+    user.team = teamA;
+    expect(teamA.members).toEqual([user]);
+    expect(teamB.members).toEqual([]);
+    user.save();
+    expect(pool.txns[2]).toEqual({
+        id: "1",
+        type: "update",
+        modelClass: "User",
+        modelId: id,
+        changeSnapshot: {
+            changes: {
+                teamId: {
+                    original: undefined,
+                    updated: teamA.id,
+                },
+            },
+        },
+    });
+
+    user.team = teamB;
+    expect(teamA.members).toEqual([]);
+    expect(teamB.members).toEqual([user]);
+    user.save();
+    expect(pool.txns[3]).toEqual({
+        id: "1",
+        type: "update",
+        modelClass: "User",
+        modelId: id,
+        changeSnapshot: {
+            changes: {
+                teamId: {
+                    original: teamA.id,
+                    updated: teamB.id,
+                },
+            },
+        },
+    });
 });

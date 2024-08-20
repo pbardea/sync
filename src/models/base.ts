@@ -137,43 +137,6 @@ rollback(change: Change) {
 
 const propKey = Symbol("properties");
 
-//     // Register the ID prop to the watch list
-//     let idProp = propertyKey.toString() + "Id";
-//
-//     const properties: (string | symbol)[] =
-//       Reflect.getMetadata(propertiesMetadataKey, target) || [];
-//     properties.push(idProp);
-//     Reflect.defineMetadata(propertiesMetadataKey, properties, target);
-//
-//     let storedValue: any;
-//
-//     Object.defineProperty(target, propertyKey, {
-//       get: function () {
-//         console.log("GETTER");
-//         return storedValue;
-//       },
-//       set: function (newValue: any) {
-//         console.log("HISDFJS");
-//         storedValue = newValue;
-//         // const oldId = storedValue;
-//         // const newId = newValue.id;
-//         //
-//         // const oldObj = (this._pool.get(oldId) as any)
-//         // // TODO: if (fk_name in T)
-//         // oldObj[fk_name] = oldObj[fk_name].filter((x: any) => x.id !== this.id)
-//         //
-//         // const newObj = this._pool.get(newId)
-//         // newObj[fk_name].push(this);
-//         //
-//         // console.log("setting value to " + newId + " at " + idProp);
-//         // this[idProp] = newId;
-//         // storedValue = newId;
-//       },
-//     });
-//     console.log("set decorator");
-//   }
-//   return dec;
-
 // TODO: Increase type safety w/ generic.
 export function ManyToOne(fkName: string) {
     return (_: any, { kind, name, metadata, addInitializer }: any) => {
@@ -191,28 +154,23 @@ export function ManyToOne(fkName: string) {
             let entity: any = undefined;
             Object.defineProperty(this, name, {
                 get: () => entity,
-                    set: (newVal: any) => {
-                    if (newVal && typeof newVal === 'object' && 'id' in newVal) {
-                        const oldId = this[idKey];
-                        const newId = newVal.id;
+                set: (newVal: any) => {
+                    const oldId = this[idKey];
+                    const newId = newVal?.id;
 
-                        if (oldId) {
-                            const oldObj = this._pool.get(oldId);
-                            oldObj[fkName] = oldObj[fkName].filter((x: any) => x.id !== this.id);
-                            oldObj.save();
-                        }
-
-                        const newObj= this._pool.get(newId)
-                        if (newObj) {
-                        }
-                        newObj[fkName].push(this);
-
-                        newObj.save();
-
-                        this[idKey] = newVal.id;
+                    if (oldId) {
+                        const oldObj = this._pool.get(oldId);
+                        oldObj[fkName] = oldObj[fkName].filter((x: any) => x.id !== this.id);
                     }
+
+                    if (newId) {
+                        const newObj= this._pool.get(newId)
+                        newObj[fkName].push(this);
+                    }
+
+                    this[idKey] = newVal?.id;
                     entity = newVal;
-                },
+              },
                 enumerable: true,
                 configurable: true
             });
