@@ -3,6 +3,8 @@ import { ObjectPool } from "./pool";
 import { User } from "./user";
 import { Team } from "./team";
 
+// TODO: Bootstrap objects.
+
 test("emits change txns", () => {
   const pool = ObjectPool.getInstance();
 
@@ -134,4 +136,39 @@ test("emits change txns", () => {
       },
     },
   });
+});
+
+test("concurrent changes w/ server", () => {
+  const pool = ObjectPool.getInstance();
+
+  const u = new User();
+  u.name = "Paul";
+  u.save();
+  pool.txns = [];
+
+  // Changes need some syncing ID or TS?
+  //
+  // Property should only be set if the property TS is less than the TS of the new change?
+
+  // Case 1
+  u.name = "Paul Bardea";
+  // Server change comes in
+  u.name = "pbardea";
+  // Another client change
+  u.email = "pbardea@gmail.com";
+  // Client code saves
+  u.save();
+  // Server change saves
+  u._save(true);
+
+  // Case 2
+  u.name = "Paul Bardea";
+  // Server change comes in
+  u.name = "pbardea";
+  // Another client change
+  u.email = "pbardea@gmail.com";
+  // Server change saves
+  u._save(true);
+  // Client code saves. THIS DOES NOT EMIT THE RIGHT CHANGES.
+  u.save();
 });

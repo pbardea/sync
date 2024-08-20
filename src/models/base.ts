@@ -147,6 +147,8 @@ export class Model {
   id: string = uuid();
 
   save(): void {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _save(_serverChange: boolean): void {}
 
   // Internal
   _pool: ObjectPool;
