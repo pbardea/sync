@@ -3,7 +3,11 @@
 import { Team } from "./team";
 import { User } from "./user";
 
-export type Change = { id: string } & (CreateChange | UpdateChange | DeletionChange);
+export type Change = { id: string } & (
+  | CreateChange
+  | UpdateChange
+  | DeletionChange
+);
 
 type IdModel = { id: string };
 
@@ -50,7 +54,7 @@ class DeletionChange {
   }
 }
 
-export type JsonModel = { __class: string, id: string } & Record<string, any>;
+export type JsonModel = { __class: string; id: string } & Record<string, any>;
 
 export function injestObjects(jsons: JsonModel[]): void {
   // TODO: Top sort
@@ -65,7 +69,7 @@ export function injestObjects(jsons: JsonModel[]): void {
 // The pool is also responsible for initializing an object graph.
 export class ObjectPool {
   private static instance: ObjectPool;
-  private constructor() { }
+  private constructor() {}
 
   static getInstance() {
     if (!ObjectPool.instance) {
@@ -92,7 +96,9 @@ export class ObjectPool {
     return this.root;
   }
 
-  addFromJson(json: { __class: string, id: string } & Record<string, any>): void {
+  addFromJson(
+    json: { __class: string; id: string } & Record<string, any>,
+  ): void {
     // TODO: Make this a dynamic lookup that's populated from the decorators.
     let constr: any = User;
     switch (json.__class) {
@@ -125,6 +131,7 @@ export class ObjectPool {
         o[key] = json[key];
       }
     }
+
     // Save and don't flush this as a change.
     o._save(true);
   }
