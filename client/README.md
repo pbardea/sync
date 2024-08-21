@@ -23,8 +23,7 @@ save() -> emits another change set
 
 ## Server Endpoints
 
-Roll your own?
-Autentication: JWT
+Authentication: Custom JWT. I just need a username and team.
 
 ### GET /bootstrap
 
