@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Team } from "./team";
-import { User } from "./user";
-
 export type Change = { id: string } & (
   | CreateChange
   | UpdateChange
@@ -54,12 +51,50 @@ class DeletionChange {
   }
 }
 
+function topologicalSort(objects: any[]): any[] {
+  const objectsDict: { [key: string]: any } = {};
+  const dependencies: { [key: string]: Set<string> } = {};
+
+  objects.forEach((obj) => {
+    objectsDict[obj.id] = obj;
+    dependencies[obj.id] = new Set();
+  });
+
+  objects.forEach((obj) => {
+    for (const key in obj) {
+      if (key.endsWith("Id")) {
+        dependencies[obj.id].add(obj[key]);
+      }
+    }
+  });
+
+  const visited: Set<string> = new Set();
+  const result: string[] = [];
+
+  function dfs(node: string) {
+    if (visited.has(node)) {
+      return;
+    }
+    visited.add(node);
+    dependencies[node].forEach((neighbor) => {
+      dfs(neighbor);
+    });
+    result.push(node);
+  }
+
+  Object.keys(objectsDict).forEach((objId) => {
+    dfs(objId);
+  });
+
+  return result.map((objId) => objectsDict[objId]);
+}
+
 export type JsonModel = { __class: string; id: string } & Record<string, any>;
 
 export function injestObjects(jsons: JsonModel[]): void {
-  // TODO: Top sort
+  const ordered = topologicalSort(jsons);
   const pool = ObjectPool.getInstance();
-  for (const json of jsons) {
+  for (const json of ordered) {
     pool.addFromJson(json);
   }
 }
@@ -72,14 +107,14 @@ export class ObjectPool {
   private constructor() {}
   static models: Record<string, any> = {};
 
-  static getInstance() {
+  public static getInstance() {
     if (!ObjectPool.instance) {
       ObjectPool.instance = new ObjectPool();
     }
     return ObjectPool.instance;
   }
 
-  static reset() {
+  public static reset() {
     ObjectPool.instance = new ObjectPool();
   }
 
