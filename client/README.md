@@ -21,3 +21,25 @@ save() -> emits the remote changes as a txn
 paul bardea (local)
 save() -> emits another change set
 
+## Server Endpoints
+
+Roll your own?
+Autentication: JWT
+
+### GET /bootstrap
+
+Finds all of the elements that I have access to (e.g. Inside my team).
+Return (eventually stream) an array of all of the JSON objects.
+
+
+### POST /change
+
+Takes a change in and applies it dynamically to the correct data model.
+
+
+### LISTEN /sync
+
+Each message streams a CHANGE event.
+
+How does the latest timestamp update here? Is this better than just sending
+the latest version of each object?
