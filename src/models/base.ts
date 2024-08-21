@@ -7,6 +7,7 @@ import { Change, ObjectPool } from "./pool";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 
 const propKey = Symbol("properties");
+const refKey = Symbol("references");
 const originalKey = Symbol("original");
 
 // TODO: Increase type safety w/ generic.
@@ -21,6 +22,11 @@ export function ManyToOne(fkName: string) {
             metadata[propKey] = {};
         }
         metadata[propKey][idKey] = true;
+
+        if (metadata[refKey] === undefined) {
+            metadata[refKey] = {};
+        }
+        metadata[refKey][idKey] = true;
 
         addInitializer(function () {
             let entity: any = undefined;
@@ -89,7 +95,16 @@ export function ClientModel(modelName: string) {
             });
 
         });
-        const props = Object.keys(metadata[propKey]);
+
+        const props = Object.keys(metadata[propKey] ?? {});
+        const refKeys = Object.keys(metadata[refKey] ?? {});
+
+        target.prototype.delete = function() {
+            // For each ManyToOne, go find the FK and filter yourself out.
+            for (const key of refKeys) {
+                this[key.slice(0, -2)] = undefined;
+            }
+        }
 
         target.prototype._save = function (serverChange: boolean) {
             let change: Change;
@@ -152,6 +167,7 @@ export class Model {
     id: string = uuid();
 
     save(): void {}
+    delete(): void {}
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _save(_serverChange: boolean): void {}
 

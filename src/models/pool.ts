@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { Model } from "./base";
+
 export type Change = { id: string } & (
   | CreateChange
   | UpdateChange
@@ -122,7 +124,7 @@ export class ObjectPool {
     return this.pool[id];
   }
 
-  pool: Record<string, IdModel> = {};
+  pool: Record<string, Model> = {};
   txns: Change[] = [];
   private root: IdModel | undefined;
   getRoot(): IdModel {
@@ -161,7 +163,7 @@ export class ObjectPool {
     o._save(true);
   }
 
-  add(model: IdModel) {
+  add(model: Model) {
     if (this.root === undefined) {
       this.root = model;
     }
@@ -195,17 +197,16 @@ export class ObjectPool {
         const target = this.pool[change.modelId];
         for (const property in change.changeSnapshot.changes) {
           const changeSnapshot = change.changeSnapshot.changes[property];
-          // TODO: Probably a better way to do this.
-          (target as any)[property] = changeSnapshot.original;
+          (target as any)[property] = changeSnapshot.updated;
         }
-
-        // An update was issued?
-        // this.updateInPool(target);
+        // I think this will eventually stabilize.
+        (target as any).save();
         break;
       }
       case "create": {
-        // this.removeFromPool(change.model.id);
-        break;
+        const modelCopy = JSON.parse(JSON.stringify(change.model));
+        modelCopy["__class"] = change.modelType;
+        this.addFromJson(modelCopy);
       }
     }
   }
@@ -221,9 +222,7 @@ export class ObjectPool {
           // TODO: Probably a better way to do this.
           (target as any)[property] = changeSnapshot.original;
         }
-
-        // An update was issued?
-        // this.updateInPool(target);
+        // Is it okay to not save here?
         break;
       }
       case "create": {
@@ -232,31 +231,6 @@ export class ObjectPool {
       }
     }
   }
-
-  // When we register a new objct in the pool, any save() call that it makes
-  // should register it's txn with us.
-  // We should give the Model a reference to us and then the save() method
-  // should create the transaction for the change that happened and apped
-  // it to the txn log.
-  //
-  // Then there should be a "thread" that reads off of this queue. Ideally
-  // when a new txn is added it's triggered (or triggered on size/time triggers in batches).
-  //
-  // Need some concept of a Rollback of a txn.
-  //
-  // The return value of the commit call needs to say the txn ID to de-dup changes.
-  //
-  // On error of committing, then the save function can rollback the txn automatically?
-
-  // objects need to be inserted into the pool in the right order
-  //
-
-  // insertToPool(model: Model): void {
-  //     // Something to resolve IDs to references.
-  //     // All of the IDs referenced should be somewhere in the pool before initialized?
-  // }
-  // removeFromPool(modelId: string): void { }
-  // updateInPool(model: Model): void {
-  //     // Remove then insert.
-  // }
 }
+
+// TODO:
