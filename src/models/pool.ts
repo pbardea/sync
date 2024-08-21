@@ -70,6 +70,7 @@ export function injestObjects(jsons: JsonModel[]): void {
 export class ObjectPool {
   private static instance: ObjectPool;
   private constructor() {}
+  static models: Record<string, any> = {};
 
   static getInstance() {
     if (!ObjectPool.instance) {
@@ -99,18 +100,7 @@ export class ObjectPool {
   addFromJson(
     json: { __class: string; id: string } & Record<string, any>,
   ): void {
-    // TODO: Make this a dynamic lookup that's populated from the decorators.
-    let constr: any = User;
-    switch (json.__class) {
-      case "Team": {
-        constr = Team;
-        break;
-      }
-      case "User": {
-        constr = User;
-        break;
-      }
-    }
+    const constr: any = ObjectPool.models[json.__class];
     // Constr adds itself to the pool.
     const o = new constr();
     for (const key of Object.keys(json)) {
@@ -161,6 +151,28 @@ export class ObjectPool {
     //     continue;
     //   }
     // }
+  }
+
+  apply(change: Change) {
+    // This is a change that we receive from a websocket.
+    switch (change.type) {
+      case "update": {
+        const target = this.pool[change.modelId];
+        for (const property in change.changeSnapshot.changes) {
+          const changeSnapshot = change.changeSnapshot.changes[property];
+          // TODO: Probably a better way to do this.
+          (target as any)[property] = changeSnapshot.original;
+        }
+
+        // An update was issued?
+        // this.updateInPool(target);
+        break;
+      }
+      case "create": {
+        // this.removeFromPool(change.model.id);
+        break;
+      }
+    }
   }
 
   // rollback undoes a change on the txn queue stack. This will happen

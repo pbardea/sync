@@ -74,6 +74,9 @@ export function Property() {
 
 export function ClientModel(modelName: string) {
     return function dec(target: any, { metadata, addInitializer }: any) {
+        // Reigster the constructor
+        ObjectPool.models[modelName] = target;
+
         addInitializer(() => {
             let original: any = undefined;
             Object.defineProperty(target, originalKey, {
