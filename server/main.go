@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
@@ -32,11 +33,12 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/login", handleLogin).Methods("POST")
+
+	// Authenticated endpoints
+	r.Use(authMiddleware)
 	r.HandleFunc("/bootstrap", handleBootstrap).Methods("GET")
 	r.HandleFunc("/change", handleChange).Methods("POST")
 	r.HandleFunc("/sync", handleSync)
-
-	r.Use(authMiddleware)
 
 	http.Handle("/", r)
 	fmt.Println("Server started on :8080")
