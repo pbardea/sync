@@ -1,4 +1,4 @@
-import { Change } from "../models/pool";
+import { Change, ServerUpdate, ApiTestingPool, ObjectPool } from "../models/pool";
 
 const BASE_URL = 'http://localhost:8080';
 
@@ -12,7 +12,10 @@ interface BootstrapData {
   objects: JsonModel[];
 }
 
-class MockApi implements ApiIface {
+export class MockApi implements ApiIface {
+  pool?: ApiTestingPool;
+  messagesToSend: ServerUpdate[] = [];
+
   async login(_username: string, _password: string): Promise<void> { }
   async bootstrap(): Promise<BootstrapData> {
     return {
@@ -49,8 +52,15 @@ class MockApi implements ApiIface {
     }
   }
 
-  // TODO: Add some configuration that enables 
-  async change(_change: Change): Promise<void> {
+  async change(change: Change): Promise<void> {
+    if (!this.pool) {
+      this.pool = ApiTestingPool.getInstance();
+    }
+    this.pool.apply(change);
+    const changedRecord = this.pool.get(change.modelId).getJson();
+    // Indicate that this is the latest change the server has seen.
+    changedRecord.lastModifiedDate = (new Date()).toISOString();
+    this.messagesToSend.push({ type: change.type, jsonObject: changedRecord });
     // Accept the change and transform it as a message to send on the queue.
     // TODO: Create a copy of the pool and maintain one server side?
     // Then you can call apply()? Or maybe just move the apply defn here?
@@ -58,8 +68,18 @@ class MockApi implements ApiIface {
     // we changed and then send that record to the 
   }
 
-  setupSync(_onMessage: (data: any) => void): void {
-    // TODO:
+  #clients: ObjectPool[] = [];
+  setupSync(client: ObjectPool): void {
+    this.#clients.push(client);
+  }
+
+  // Test helper: Runs the websocket server until drained.
+  async runWorker(): Promise<void> {
+    for (const message of this.messagesToSend) {
+      for (const client of this.#clients) {
+        client.applyServerUpdate(message);
+      }
+    }
   }
 }
 
@@ -67,25 +87,26 @@ export interface ApiIface {
   login(username: string, password: string): Promise<void>
   bootstrap(): Promise<BootstrapData>;
   change(data: Change): Promise<void>;
-  setupSync(onMessage: (data: any) => void): void;
+  setupSync(client: ObjectPool): void;
 }
 
 class ApiClient implements ApiIface {
   private token: string | null = null;
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${BASE_URL}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
-      ...options.headers,
-    };
+  private async request<T>(_endpoint: string, _options: RequestInit = {}): Promise<T> {
+    // const url = `${BASE_URL}${endpoint}`;
+    // const headers = {
+    //   'Content-Type': 'application/json',
+    //   ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+    //   ...options.headers,
+    // };
 
-    const response = await fetch(url, { ...options, headers });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
+    // const response = await fetch(url, { ...options, headers });
+    // if (!response.ok) {
+    //   throw new Error(`HTTP error! status: ${response.status}`);
+    // }
+    // return response.json();
+    return new Promise((resolve, _reject) => resolve({} as T));
   }
 
   // TODO: Figure out when to do this.
@@ -123,5 +144,6 @@ class ApiClient implements ApiIface {
   }
 }
 
-export const api = new ApiClient();
+// export const api = new ApiClient();
+export const mockApi = new MockApi();
 

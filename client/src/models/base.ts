@@ -2,6 +2,7 @@
 
 import { v4 as uuid } from "uuid";
 import { Change, ObjectPool } from "./pool";
+import { JsonModel } from "../api";
 
 // TODO: Figure out how to polyfill this w/ build system.
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
@@ -84,11 +85,11 @@ export function ClientModel(modelName: string) {
     ObjectPool.models[modelName] = target;
 
     addInitializer(() => {
-      let original: any = undefined;
+      let stored: any = undefined;
       Object.defineProperty(target, originalKey, {
-        get: () => original,
+        get: () => stored,
         set: (newVal: any) => {
-          original = newVal;
+          stored = newVal;
         },
         enumerable: true,
         configurable: true,
@@ -99,11 +100,87 @@ export function ClientModel(modelName: string) {
     const props = Object.keys(metadata[propKey] ?? {});
     const refKeys = Object.keys(metadata[refKey] ?? {});
 
-    target.prototype.delete = function() {
-      // For each ManyToOne, go find the FK and filter yourself out.
-      for (const key of refKeys) {
-        this[key.slice(0, -2)] = undefined;
+    // This should be called whenever an ID is updated in the pool (add or update).
+    const handleOrphans = (id: string) => {
+      const entries = this._pool.orphans[id] ?? [];
+      for (const orphanEntry of entries) {
+        const obj = orphanEntry.obj;
+        obj[orphanEntry.propName] = this;
       }
+      delete this.getOrphans[id]
+    }
+
+    // Delete can orphan elements.
+    // For each element that it referenced that is still in the pool, make a note.
+    // This is because one way we can do "updates" is to delete the object and add it back.
+    // It also saves us from needing to sort all of the objects up-front so we
+    // can ingest them in a streaming fasion and don't need to hold them all
+    // in memory.
+    //
+    // Here's an example:
+    // We first ingest User1 that references Team1, but team does not exist
+    // We fail the lookup to Team1 in the object pool, we make a note of that
+    // in the orphan pool.
+    // TODO: Orphan pool shouldn't be in metadata. It should be at the pool level.
+    // When inserting Team, we check if my ID is in the orphan pool. If it is,
+    // someone tried to reference me. The value of the key map is an array of all
+    // of the objects that tried to reference me and the key by which they referenced me by.
+    // We can actually just store an array of references to those objects.
+    //
+    // Example entry:
+    // {
+    //   "123-123-123": [{
+    //     "obj": #ref<User>,
+    //     "propName": "team",
+    //   }]
+    // }
+    //
+    // For each element in the array, loop through and do:
+    //
+    // I think that we also need to do this whenever an ID changes.
+    // I'm not sure we should allow ID changes?
+    //
+    // const entries = this.getOrphans[id];
+    // for (const orphanEntry of entries) {
+    //   const obj = orphanEntry.obj;
+    //   obj[orphanEntry.propName] = this;
+    // }
+    // delete this.getOrphans[id]
+    //
+    // Then, when something is deleted:
+    // E.g. [members] for teams
+    target.prototype.delete = function() {
+      const id = this["id"];
+      // For each of your OneToMany's filter yourself out.
+      // for (const { prop, revFkName } of this._pool.reverseLookups[modelName]) {
+      //   for (const ref of this[prop]) {
+      //     this._pool.orphans[id] = this._pool.orphans[id] ?? [];
+      //     this._pool.orphans[id].push({
+      //       obj: ref,
+      //       propName: revFkName,
+      //     });
+      //   }
+      // }
+      // For each ManyToOne, go find the FK and filter yourself out.
+      for (const idKey of refKeys) {
+        // E.g. turns teamId -> team
+        const refKey = idKey.slice(0, -2)
+        this[refKey] = undefined;
+      }
+    }
+
+    target.prototype.getJson = function() {
+      // Remove all references.
+      const o = JSON.parse(
+        JSON.stringify(this, (key, value) => {
+          if (key && typeof value === "object") {
+            return undefined;
+          }
+          return value;
+        }),
+      );
+      o["__class"] = target.name;
+      return o;
     }
 
     target.prototype._save = function(serverChange: boolean) {
@@ -111,18 +188,12 @@ export function ClientModel(modelName: string) {
       const original = this[originalKey];
 
       if (original === undefined) {
-        const copyThis = JSON.parse(
-          JSON.stringify(this, (key, value) => {
-            if (key && typeof value === "object") {
-              return undefined;
-            }
-            return value;
-          }),
-        );
+        const copyThis = this.getJson();
         change = {
           id: "1",
           type: "create",
           modelType: modelName,
+          modelId: copyThis.id,
           model: JSON.parse(JSON.stringify(copyThis)),
         };
         this[originalKey] = copyThis;
@@ -141,7 +212,7 @@ export function ClientModel(modelName: string) {
         change = {
           id: "1",
           type: "update",
-          modelClass: modelName,
+          modelType: modelName,
           modelId: this.id,
           changeSnapshot: { changes },
         };
@@ -162,25 +233,27 @@ export function ClientModel(modelName: string) {
 }
 
 // Base class.
-export class Model {
+export abstract class Model {
   @Property()
-  id: string = uuid();
+  id: string;
 
   // Changes to this value are not emitted. We update this as we injest
   // the json from the server.
   lastModifiedDate?: Date;
 
-  save(): void { }
-  delete(): void { }
+  abstract save(): void;
+  abstract getJson(): JsonModel;
+  abstract delete(): void;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _save(_serverChange: boolean): void { }
+  abstract _save(_serverChange: boolean): void;
 
-  // Internal
+  // Internal. Should be a hash.
   _pool: ObjectPool;
 
-  constructor() {
+  constructor(pool = ObjectPool.getInstance(), id = uuid()) {
+    this.id = id;
     // Connect to the singleton.
-    this._pool = ObjectPool.getInstance();
+    this._pool = pool;
     this._pool.add(this);
   }
 }

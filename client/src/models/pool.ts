@@ -47,14 +47,21 @@
 *
 */
 
-import { api, ApiIface, JsonModel } from "../api";
+import { v4 } from "uuid";
+import { ApiIface, JsonModel } from "../api";
 import { Model } from "./base";
 
-export type Change = { id: string } & (
+// TODO: Is BaseChange needed here?
+export type Change = BaseChange & (
   | CreateChange
   | UpdateChange
   | DeletionChange
 );
+
+export type ServerUpdate = {
+  type: "create" | "update" | "delete",
+  jsonObject: JsonModel
+}
 
 type IdModel = { id: string };
 
@@ -62,42 +69,55 @@ type ChangeSnapshot = {
   changes: Record<string, { original: any; updated: any }>;
 };
 
-class UpdateChange {
+interface BaseChange {
+  id: string;
+  modelType: string;
+  modelId: string;
+}
+
+class UpdateChange implements BaseChange {
+  id = v4();
   type = "update" as const;
-  modelClass: string;
+  modelType: string;
   modelId: string;
   changeSnapshot: ChangeSnapshot;
 
   constructor(
-    modelClass: string,
+    modelType: string,
     modelId: string,
     changeSnapshot: ChangeSnapshot,
   ) {
-    this.modelClass = modelClass;
+    this.modelType = modelType;
     this.modelId = modelId;
     this.changeSnapshot = changeSnapshot;
   }
 }
 
-class CreateChange {
+class CreateChange implements BaseChange {
+  id = v4();
   type = "create" as const;
   modelType: string;
+  modelId: string;
   model: any;
 
   constructor(modelType: string, model: any) {
     this.modelType = modelType;
     this.model = model;
+    this.modelId = model.id;
   }
 }
 
-class DeletionChange {
+class DeletionChange implements BaseChange {
+  id = v4();
   type = "delete" as const;
   modelType: string;
+  modelId: string;
   model: any;
 
   constructor(modelType: string, model: any) {
     this.modelType = modelType;
     this.model = model;
+    this.modelId = model.id;
   }
 }
 
@@ -151,9 +171,8 @@ function topologicalSort(objects: any[]): any[] {
   return result.map((objId) => objectsDict[objId]);
 }
 
-export function injestObjects(jsons: JsonModel[]): void {
+export function injestObjects(jsons: JsonModel[], pool = ObjectPool.getInstance()): void {
   const ordered = topologicalSort(jsons);
-  const pool = ObjectPool.getInstance();
   for (const json of ordered) {
     pool.addFromJson(json);
   }
@@ -163,25 +182,25 @@ export function injestObjects(jsons: JsonModel[]): void {
 // Models register their changes in the pool so that their changes are sent to the sync system.
 // The pool is also responsible for initializing an object graph.
 export class ObjectPool {
-  private static instance: ObjectPool;
-  private constructor(api?: ApiIface) {
+  protected static instance: ObjectPool;
+  protected constructor(api?: ApiIface) {
     this.apiClient = api;
   }
   static models: Record<string, any> = {};
   private apiClient?: ApiIface;
 
-  public static getInstance(apiClient = undefined) {
+  public static getInstance(apiClient: ApiIface | undefined = undefined) {
     if (!ObjectPool.instance) {
       ObjectPool.instance = new ObjectPool(apiClient);
     }
     return ObjectPool.instance;
   }
 
-  public static reset(apiClient = undefined) {
+  public static reset(apiClient: ApiIface | undefined = undefined) {
     ObjectPool.instance = new ObjectPool(apiClient);
   }
 
-  get(id: string): { id: string } {
+  get(id: string): Model {
     return this.pool[id];
   }
 
@@ -195,40 +214,49 @@ export class ObjectPool {
     return this.root;
   }
 
-  applyServerUpdate(type: "create" | "update" | "delete", jsonObj: JsonModel) {
+  applyServerUpdate({ type, jsonObject }: ServerUpdate) {
     switch (type) {
       case "create": {
         // This might be a good reason to do the lazy initialization of the
         // references. This way if updates come in out of order we're not
         // dependent on that.
-        this.addFromJson(jsonObj);
+        this.addFromJson(jsonObject);
         break;
       }
       case "update": {
-        const elem = this.pool[jsonObj.id];
+        const elem = this.pool[jsonObject.id];
         if (!elem) {
           // If we try to update an object that's not here it might have been
           // deleted. We could introduce some tombstone process here...
           //
           // If we miss this update because it wasn't created yet, we should
           // eventually catch up on the next update.
+          // console.debug(`Couldn't find element when applying`);
           return;
         }
-        const serverDate = new Date(jsonObj.lastModifiedDate);
+        const serverDate = new Date(jsonObject.lastModifiedDate);
         const localDate = new Date(elem.lastModifiedDate ?? 0)
         if (serverDate.getTime() < localDate.getTime()) {
           // Server change is outdated. Ignore.
+          // console.debug("Ignoring update from server - I have a more recent v");
           return;
         }
+        if (jsonObject["name"].includes("race")) {
+          // console.log(type);
+          // console.log(jsonObject);
+        }
+
+        // To update top references, I need to support that lazy sorting I
+        // was talkign about. Let's try a user.
         elem.delete();
-        delete this.pool[jsonObj.id];
-        this.addFromJson(jsonObj);
+        delete this.pool[jsonObject.id];
+        this.addFromJson(jsonObject);
         break;
       }
       case "delete": {
-        const elem = this.pool[jsonObj.id];
+        const elem = this.pool[jsonObject.id];
         elem.delete();
-        delete this.pool[jsonObj.id];
+        delete this.pool[jsonObject.id];
         break;
       }
     }
@@ -238,7 +266,7 @@ export class ObjectPool {
   addFromJson(json: JsonModel): void {
     const constr: any = ObjectPool.models[json.__class];
     // Constr adds itself to the pool.
-    const o = new constr();
+    const o = new constr(this);
     for (const key of Object.keys(json)) {
       if (key === "__class") {
         // Don't write the __class property.
@@ -262,6 +290,8 @@ export class ObjectPool {
     }
 
     // Save and don't flush this as a change.
+    // Not flushing the change is only safe when we know user code won't
+    // run concurrently.
     o._save(true);
   }
 
@@ -280,7 +310,7 @@ export class ObjectPool {
     }
     try {
       // Make an async request to change?.
-      await api.change(change);
+      await this.apiClient.change(change);
       // If we get a success, that means that the change was accepted. We can
       // remove this from the local persistance because if we refresh we'll
       // get the latest from the server.
@@ -298,35 +328,6 @@ export class ObjectPool {
       }
       // We did not successfully make a request so keep it in the local queue.
       console.error(e);
-    }
-  }
-
-  // TODO: Figure out if this is needed.
-  apply(change: Change) {
-    // This is a change that we receive from a websocket.
-    switch (change.type) {
-      case "update": {
-        const target = this.pool[change.modelId];
-        for (const property in change.changeSnapshot.changes) {
-          const changeSnapshot = change.changeSnapshot.changes[property];
-          (target as any)[property] = changeSnapshot.updated;
-        }
-        // I think this will eventually stabilize.
-        (target as any).save();
-        break;
-      }
-      case "create": {
-        const modelCopy = JSON.parse(JSON.stringify(change.model));
-        modelCopy["__class"] = change.modelType;
-        this.addFromJson(modelCopy);
-        break;
-      }
-      case "delete": {
-        const o = this.pool[change.model.id];
-        o.delete();
-        delete this.pool[change.model.id];
-        break;
-      }
     }
   }
 
@@ -359,5 +360,58 @@ export class ObjectPool {
     }
     // TODO: For this to work we need to ensure that all txns have unique IDs.
     this.txns = this.txns.filter(x => x.id !== change.id);
+  }
+}
+
+// This is kinda just a big hack. Probably a very bad idea.
+//
+// TestingPool is used to simulate a backend.
+// It keeps objects in-memory. Instead of sending requests to the backend it
+// applies the changes directly to the in-memory state. The addChange method
+//
+export class ApiTestingPool extends ObjectPool {
+  protected static testInstance: ApiTestingPool;
+
+  public static override getInstance(apiClient = undefined) {
+    if (!ApiTestingPool.testInstance) {
+      ApiTestingPool.testInstance = new ApiTestingPool(apiClient);
+    }
+    return ApiTestingPool.testInstance;
+  }
+  // TODO: Figure out if this is needed.
+  apply(change: Change) {
+    // This is a change that we receive from a websocket.
+    switch (change.type) {
+      case "update": {
+        const target = this.pool[change.modelId];
+        for (const property in change.changeSnapshot.changes) {
+          const changeSnapshot = change.changeSnapshot.changes[property];
+          (target as any)[property] = changeSnapshot.updated;
+        }
+        // I think this will eventually stabilize.
+        (target as any).save();
+        break;
+      }
+      case "create": {
+        const modelCopy = JSON.parse(JSON.stringify(change.model));
+        modelCopy["__class"] = change.modelType;
+        this.addFromJson(modelCopy);
+        break;
+      }
+      case "delete": {
+        const o = this.pool[change.model.id];
+        o.delete();
+        delete this.pool[change.model.id];
+        break;
+      }
+    }
+  }
+
+}
+
+// TODO: Refactor this as just another helper on objectpool that returns a new instance.
+export class SecondTestInstance extends ObjectPool {
+  public static override getInstance(apiClient: ApiIface | undefined = undefined) {
+    return new SecondTestInstance(apiClient);
   }
 }

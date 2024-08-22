@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { Change, injestObjects, ObjectPool } from "./pool";
+import { Change, injestObjects, ObjectPool, ApiTestingPool, SecondTestInstance } from "./pool";
 import { User } from "./user";
 import { Team } from "./team";
+import { mockApi } from "../api";
 
 describe("object pool", () => {
   beforeEach(() => {
@@ -87,33 +88,6 @@ describe("object pool", () => {
 
   test("can bootstrap", () => {
     const pool = ObjectPool.getInstance();
-    const bootstrapJson = [
-      {
-        id: "279592c1-2334-430b-b97f-a8f9265d4805",
-        name: "Team A",
-        __class: "Team",
-      },
-      {
-        id: "6f73afd5-b171-4ea5-80af-7e5040c178b2",
-        name: "Paul Bardea",
-        teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-        __class: "User",
-      },
-      {
-        id: "e86cd579-c61c-4f7b-ad53-d1f8670968dc",
-        name: "Paul",
-        email: "paul@pbardea.com",
-        teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-        __class: "User",
-      },
-      {
-        id: "8949e0a4-357b-4a42-b6a3-ec90699197e7",
-        name: "Orphan",
-        email: "paul@pbardea.com",
-        __class: "User",
-      },
-    ];
-
     injestObjects(bootstrapJson);
     const team = pool.getRoot() as Team;
     expect(team.constructor.name).toEqual("Team");
@@ -153,7 +127,7 @@ describe("object pool", () => {
     expect(pool.txns[1]).toEqual({
       id: "1",
       type: "update",
-      modelClass: "User",
+      modelType: "User",
       modelId: id,
       changeSnapshot: {
         changes: {
@@ -178,7 +152,7 @@ describe("object pool", () => {
     expect(pool.txns[0]).toEqual({
       id: "1",
       type: "update",
-      modelClass: "User",
+      modelType: "User",
       modelId: id,
       changeSnapshot: {
         changes: {
@@ -197,7 +171,7 @@ describe("object pool", () => {
     expect(pool.txns[1]).toEqual({
       id: "1",
       type: "update",
-      modelClass: "User",
+      modelType: "User",
       modelId: id,
       changeSnapshot: {
         changes: {
@@ -222,7 +196,7 @@ describe("object pool", () => {
     expect(pool.txns[2]).toEqual({
       id: "1",
       type: "update",
-      modelClass: "User",
+      modelType: "User",
       modelId: id,
       changeSnapshot: {
         changes: {
@@ -241,7 +215,7 @@ describe("object pool", () => {
     expect(pool.txns[3]).toEqual({
       id: "1",
       type: "update",
-      modelClass: "User",
+      modelType: "User",
       modelId: id,
       changeSnapshot: {
         changes: {
@@ -268,35 +242,13 @@ describe("object pool", () => {
     expect(t.members).toEqual([]);
   });
 
-  // TODO: I'm not sure if we actually need this method anymore
-  test("can ingest events", () => {
-    const u = new User();
-
-    const change: Change = {
-      id: "1",
-      type: "update",
-      modelClass: "User",
-      modelId: u.id,
-      changeSnapshot: {
-        changes: {
-          name: {
-            original: "John",
-            updated: "Paul",
-          },
-        },
-      },
-    };
-    ObjectPool.getInstance().apply(change);
-    expect(u.name).toEqual("Paul");
-  });
-
   test("injest change records", () => {
     const pool = ObjectPool.getInstance();
     // Using getUser because the client should be using MobX to always select
     // the right object from the graph.
-    const getUser = (email = "paul@pbardea.com") => {
+    const getUser = (id = "e86cd579-c61c-4f7b-ad53-d1f8670968dc") => {
       const team = (pool.getRoot() as Team);
-      const u = team.members.find(x => x.email === email);
+      const u = team.members.find(x => x.id === id);
       expect(u).toBeDefined();
       const user = u!;
       return user;
@@ -314,7 +266,7 @@ describe("object pool", () => {
       lastModifiedDate: "2024-08-21T15:30:00Z",
       __class: "User",
     }
-    pool.applyServerUpdate("update", staleUpdate);
+    pool.applyServerUpdate({ type: "update", jsonObject: staleUpdate });
     expect(getUser().name).toEqual("Paul");
 
     const serverUpdate = {
@@ -326,7 +278,7 @@ describe("object pool", () => {
       __class: "User",
     }
 
-    pool.applyServerUpdate("update", serverUpdate);
+    pool.applyServerUpdate({ type: "update", jsonObject: serverUpdate });
     expect(getUser().name).toEqual("Updated Name");
 
     const newUser = {
@@ -337,15 +289,97 @@ describe("object pool", () => {
       lastModifiedDate: (new Date()).toISOString(),
       __class: "User",
     }
-    pool.applyServerUpdate("create", newUser);
-    expect(getUser("new@pbardea.com").name).toEqual("New User");
+    pool.applyServerUpdate({ type: "create", jsonObject: newUser });
+    expect(getUser("7465a9aa-5812-488c-a2de-dfc55c89bca7").name).toEqual("New User");
 
     // TODO: We might want deletes to be formatted differently and just specify
     // the ID.
-    pool.applyServerUpdate("delete", newUser);
+    pool.applyServerUpdate({ type: "delete", jsonObject: newUser });
     const missingUser = (pool.getRoot() as Team).members.find(x => x.email === "new@pbardea.com");
     expect(missingUser).toBeUndefined();
 
     // TODO: Test invalid payloads...
+  });
+
+  test("clients see each others changes", async () => {
+    const api = mockApi;
+    ObjectPool.reset(api);
+    const p1 = ObjectPool.getInstance();
+    const p2 = SecondTestInstance.getInstance(api);
+    api.setupSync(p1);
+    api.setupSync(p2);
+
+    // TODO: We should probably use mobx in these tests.
+    const getUser = (pool: ObjectPool, id = "e86cd579-c61c-4f7b-ad53-d1f8670968dc") => {
+      const team = (pool.getRoot() as Team);
+      const u = team.members.find(x => x.id === id);
+      expect(u).toBeDefined();
+      const user = u!;
+      return user;
+    }
+
+    // Bootstrap the API pool "server side".
+    injestObjects(bootstrapJson, ApiTestingPool.getInstance());
+    injestObjects(bootstrapJson, p1);
+    injestObjects(bootstrapJson, p2);
+
+    expect(getUser(p1).name).equals("Paul");
+    expect(getUser(p2).name).equals("Paul");
+
+    const p1User = getUser(p1);
+    p1User.name = "Client 1 updated name";
+    p1User.save();
+    expect(getUser(p1).name).equals("Client 1 updated name");
+    expect(getUser(p2).name).equals("Paul");
+
+    await mockApi.runWorker();
+    expect(getUser(p1).name).equals("Client 1 updated name");
+    expect(getUser(p2).name).equals("Client 1 updated name");
+
+    getUser(p2).name = "Client 2 updated name";
+    getUser(p2).save();
+    expect(getUser(p1).name).equals("Client 1 updated name");
+    expect(getUser(p2).name).equals("Client 2 updated name");
+
+    await mockApi.runWorker();
+    expect(getUser(p1).name).equals("Client 2 updated name");
+    expect(getUser(p2).name).equals("Client 2 updated name");
+
+    getUser(p1).name = "Client 1 race";
+    getUser(p2).name = "Client 2 race";
+    getUser(p1).save();
+    getUser(p2).save(); // Client 2 should win because it's saved 2nd.
+    expect(getUser(p1).name).equals("Client 1 race");
+    expect(getUser(p2).name).equals("Client 2 race");
+
+    await mockApi.runWorker();
+    expect(getUser(p1).name).equals("Client 2 race");
+    expect(getUser(p2).name).equals("Client 2 race");
+  });
+});
+
+describe("API Testing Pool", () => {
+  // TODO: I'm not sure if we actually need this method anymore
+  // This should move to it's own describe.
+  test("can ingest events", () => {
+    const pool = ApiTestingPool.getInstance();
+    const u = new User(pool);
+
+    const change: Change = {
+      id: "1",
+      type: "update",
+      modelType: "User",
+      modelId: u.id,
+      changeSnapshot: {
+        changes: {
+          name: {
+            original: "John",
+            updated: "Paul",
+          },
+        },
+      },
+    };
+    pool.apply(change);
+    expect(u.name).toEqual("Paul");
   });
 });
