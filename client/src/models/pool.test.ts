@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { Change, injestObjects, ObjectPool, ApiTestingPool, SecondTestInstance } from "./pool";
+import {
+  Change,
+  injestObjects,
+  ObjectPool,
+  ApiTestingPool,
+  SecondTestInstance,
+} from "./pool";
 import { User } from "./user";
 import { Team } from "./team";
 import { mockApi } from "../api";
@@ -15,7 +21,7 @@ describe("object pool", () => {
       id: "6f73afd5-b171-4ea5-80af-7e5040c178b2",
       name: "Paul Bardea",
       teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-      lastModifiedDate: (new Date()).toISOString(),
+      lastModifiedDate: new Date().toISOString(),
       __class: "User",
     },
     {
@@ -23,20 +29,20 @@ describe("object pool", () => {
       name: "Paul",
       email: "paul@pbardea.com",
       teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-      lastModifiedDate: (new Date()).toISOString(),
+      lastModifiedDate: new Date().toISOString(),
       __class: "User",
     },
     {
       id: "279592c1-2334-430b-b97f-a8f9265d4805",
       name: "Team A",
-      lastModifiedDate: (new Date()).toISOString(),
+      lastModifiedDate: new Date().toISOString(),
       __class: "Team",
     },
     {
       id: "8949e0a4-357b-4a42-b6a3-ec90699197e7",
       name: "Orphan",
       email: "paul@pbardea.com",
-      lastModifiedDate: (new Date()).toISOString(),
+      lastModifiedDate: new Date().toISOString(),
       __class: "User",
     },
   ];
@@ -48,14 +54,15 @@ describe("object pool", () => {
       {
         id: "6f73afd5-b171-4ea5-80af-7e5040c178b2",
         name: "Paul Bardea",
-        lastModifiedDate: (new Date()).toISOString(),
+        lastModifiedDate: new Date().toISOString(),
         boom: "bar",
         __class: "Team",
-      }
+      },
     ];
 
     injestObjects(bootstrapJson);
-    const team = (ObjectPool.getInstance().getRoot() as Team)
+    const team = ObjectPool.getInstance().getRoot() as Team;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((team as any)["boom"]).toEqual("bar");
   });
 
@@ -65,13 +72,14 @@ describe("object pool", () => {
         id: "6f73afd5-b171-4ea5-80af-7e5040c178b2",
         name: "Paul Bardea",
         teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-        lastModifiedDate: (new Date()).toISOString(),
+        lastModifiedDate: new Date().toISOString(),
         __class: "User",
-      }
+      },
     ];
 
-    expect(() => injestObjects(bootstrapJson))
-      .toThrow("Referencing object that doesn't exist");
+    expect(() => injestObjects(bootstrapJson)).toThrow(
+      "Referencing object that doesn't exist",
+    );
   });
 
   test("can bootstrap out of order", () => {
@@ -247,12 +255,12 @@ describe("object pool", () => {
     // Using getUser because the client should be using MobX to always select
     // the right object from the graph.
     const getUser = (id = "e86cd579-c61c-4f7b-ad53-d1f8670968dc") => {
-      const team = (pool.getRoot() as Team);
-      const u = team.members.find(x => x.id === id);
+      const team = pool.getRoot() as Team;
+      const u = team.members.find((x) => x.id === id);
       expect(u).toBeDefined();
       const user = u!;
       return user;
-    }
+    };
 
     // Startup
     injestObjects(bootstrapJson);
@@ -265,7 +273,7 @@ describe("object pool", () => {
       teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
       lastModifiedDate: "2024-08-21T15:30:00Z",
       __class: "User",
-    }
+    };
     pool.applyServerUpdate({ type: "update", jsonObject: staleUpdate });
     expect(getUser().name).toEqual("Paul");
 
@@ -274,9 +282,9 @@ describe("object pool", () => {
       name: "Updated Name",
       email: "paul@pbardea.com",
       teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-      lastModifiedDate: (new Date()).toISOString(),
+      lastModifiedDate: new Date().toISOString(),
       __class: "User",
-    }
+    };
 
     pool.applyServerUpdate({ type: "update", jsonObject: serverUpdate });
     expect(getUser().name).toEqual("Updated Name");
@@ -286,16 +294,20 @@ describe("object pool", () => {
       name: "New User",
       email: "new@pbardea.com",
       teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
-      lastModifiedDate: (new Date()).toISOString(),
+      lastModifiedDate: new Date().toISOString(),
       __class: "User",
-    }
+    };
     pool.applyServerUpdate({ type: "create", jsonObject: newUser });
-    expect(getUser("7465a9aa-5812-488c-a2de-dfc55c89bca7").name).toEqual("New User");
+    expect(getUser("7465a9aa-5812-488c-a2de-dfc55c89bca7").name).toEqual(
+      "New User",
+    );
 
     // TODO: We might want deletes to be formatted differently and just specify
     // the ID.
     pool.applyServerUpdate({ type: "delete", jsonObject: newUser });
-    const missingUser = (pool.getRoot() as Team).members.find(x => x.email === "new@pbardea.com");
+    const missingUser = (pool.getRoot() as Team).members.find(
+      (x) => x.email === "new@pbardea.com",
+    );
     expect(missingUser).toBeUndefined();
 
     // TODO: Test invalid payloads...
@@ -310,13 +322,16 @@ describe("object pool", () => {
     api.setupSync(p2);
 
     // TODO: We should probably use mobx in these tests.
-    const getUser = (pool: ObjectPool, id = "e86cd579-c61c-4f7b-ad53-d1f8670968dc") => {
-      const team = (pool.getRoot() as Team);
-      const u = team.members.find(x => x.id === id);
+    const getUser = (
+      pool: ObjectPool,
+      id = "e86cd579-c61c-4f7b-ad53-d1f8670968dc",
+    ) => {
+      const team = pool.getRoot() as Team;
+      const u = team.members.find((x) => x.id === id);
       expect(u).toBeDefined();
       const user = u!;
       return user;
-    }
+    };
 
     // Bootstrap the API pool "server side".
     injestObjects(bootstrapJson, ApiTestingPool.getInstance());

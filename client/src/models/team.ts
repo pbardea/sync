@@ -1,11 +1,21 @@
+import { v4 } from "uuid";
 import { ClientModel, Model, OneToMany, Property } from "./base";
 import { User } from "./user";
+import { ObjectPool } from "./pool";
+import { observable } from "mobx";
 
 @ClientModel("Team")
 export class Team extends Model {
-  @Property()
-  name: string = "";
+    @observable
+    @Property()
+    accessor name: string;
 
-  @OneToMany()
-  public members: User[] = [];
+    @observable
+    @OneToMany("team")
+    public accessor members: User[] = [];
+
+    constructor(pool = ObjectPool.getInstance(), id = v4()) {
+        super(pool, id);
+        this.name = "";
+    }
 }
