@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "prebuild": "electron-vite build",
+    "dev-vite": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest",
     "lint": "eslint .",
@@ -12,7 +15,7 @@
   },
   "dependencies": {
     "mobx": "^6.13.1",
-    "mobx-react-lite": "^4.0.7",
+    "mobx-react": "^9.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "uuid": "^10.0.0"
@@ -23,6 +26,8 @@
     "@types/react-dom": "^18.3.0",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^32.0.1",
+    "electron-vite": "^2.3.0",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
