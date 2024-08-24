@@ -7,8 +7,9 @@ import { Team } from "./models/team.ts";
 import { User } from "./models/user.ts";
 import { mockApi } from "./api/index.ts";
 
-new User();
-new Team();
+User.init();
+Team.init();
+
 const api = mockApi;
 ObjectPool.reset(api);
 api.setupSync(ObjectPool.getInstance());

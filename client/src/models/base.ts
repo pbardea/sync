@@ -2,7 +2,7 @@
 
 import { Change, ObjectPool } from "./pool";
 import { JsonModel } from "../api";
-import { makeObservable, observable } from "mobx";
+import { action, makeObservable, observable } from "mobx";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
 
@@ -41,8 +41,9 @@ export function ManyToOne(fkName: string) {
                     // in data there.
                     if (oldId) {
                         const oldObj = this._pool.get(oldId);
-                        oldObj[fkName] = oldObj[fkName].filter(
-                            (x: any) => x.id !== this.id,
+                        oldObj.setProperty(
+                            fkName,
+                            oldObj[fkName].filter((x: any) => x.id !== this.id),
                         );
                     }
 
@@ -53,9 +54,10 @@ export function ManyToOne(fkName: string) {
                             // console.log(this._pool)
                         }
                         newObj[fkName].push(this);
+                        newObj.setProperty(fkName, newObj[fkName]);
                     }
 
-                    this[idKey] = newVal?.id;
+                    this.setProperty(idKey, newVal?.id);
                     entity = newVal;
                 },
                 enumerable: true,
@@ -194,6 +196,8 @@ export function ClientModel(modelName: string) {
 
 // Base class.
 export class Model {
+    static init() { }
+
     @observable
     @Property()
     accessor id: string;
@@ -213,6 +217,11 @@ export class Model {
     }
     _save(): void {
         throw new Error("Not implemented");
+    }
+
+    @action
+    setProperty(key: any, value: any) {
+        (this as any)[key] = value;
     }
 
     // Internal. Should be a hash.

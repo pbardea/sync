@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { observer } from "mobx-react";
 import { Team } from "./models/team";
@@ -7,21 +7,29 @@ import { mockApi } from "./api";
 const App = observer((props: { team: Team }) => {
     const [count, setCount] = useState(0);
 
-    useEffect(() => {
-        setTimeout(() => {
+    const handleInputChange = useCallback(
+        (e: ChangeEvent) => {
             const user = props.team?.members.find(
                 (x) => x.id === "6f73afd5-b171-4ea5-80af-7e5040c178b2",
             );
             if (user === undefined) {
                 return;
             }
-            user.email = "hhahhaaha";
+            user.email = (e.target as HTMLInputElement).value;
             user.save();
-        }, 1000);
-        setTimeout(() => {
+        },
+        [props.team?.members],
+    );
+
+    useEffect(() => {
+        const intervalId = setInterval(() => {
             mockApi.runWorker();
         }, 5000);
-    }, [props.team?.members]);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, []);
 
     return (
         <>
@@ -32,6 +40,7 @@ const App = observer((props: { team: Team }) => {
                 <button onClick={() => setCount((count) => count + 1)}>
                     count is {count}
                 </button>
+                <input onChange={handleInputChange} />
                 <p>
                     Edit <code>src/App.tsx</code> and save to test HMR
                 </p>
