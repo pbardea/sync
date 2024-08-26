@@ -2,7 +2,7 @@ import { v4 } from 'uuid'
 import { ClientModel, Model, OneToMany, Property } from './base'
 import { User } from './user'
 import { ObjectPool } from './pool'
-import { makeObservable, observable } from 'mobx'
+import { observable } from 'mobx'
 
 @ClientModel('Team')
 export class Team extends Model {
@@ -16,7 +16,6 @@ export class Team extends Model {
 
   constructor(pool = ObjectPool.getInstance(), id = v4()) {
     super(pool, id)
-    makeObservable(this)
     this.name = ''
   }
 }

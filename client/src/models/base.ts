@@ -2,7 +2,7 @@
 
 import { Change, ObjectPool } from "./pool";
 import { JsonModel } from "../api";
-import { action, makeObservable, observable } from "mobx";
+import { action, observable } from "mobx";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
 
@@ -250,7 +250,6 @@ export class Model {
     // Rather than passing in, the ObjectPool should be able to choose the current client.
     // id can then be assigned afterwards as long as it's before initial save
     constructor(pool: ObjectPool, id: string) {
-        makeObservable(this);
         this.id = id;
         // Connect to the singleton.
         this._pool = pool;
