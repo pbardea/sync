@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -62,7 +63,7 @@ func main() {
 
 	// CORS middleware
 	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"http://localhost:5173"})
+	originsOk := handlers.AllowedOrigins([]string{"http://localhost:5173", "http://localhost:5174"})
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})
 
 	http.ListenAndServe(":8080", handlers.CORS(headersOk, originsOk, methodsOk)(r))
@@ -161,6 +162,8 @@ func writeObject(db *sql.DB, object string, cols []string) ([]map[string]interfa
         data := make(map[string]interface{})
         data["__class"] = strings.ToUpper(object[:1]) + object[1:]
         for i, v := range values {
+            fmt.Println(object)
+            fmt.Println(v)
             x := v.(string)
 
             if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
@@ -216,10 +219,50 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func updateEmail(db *sql.DB, newEmail string, id string) error {
-    // currentTime := time.Now()
-    queryText := `UPDATE "user" SET email = $1 WHERE id = $2`
-    _, err := db.Exec(queryText, newEmail, id)
+func deleteObject(db *sql.DB, object string, id string) error {
+    queryText := fmt.Sprintf(`DELETE FROM "%s" WHERE id = $1`, strings.ToLower(object))
+    fmt.Println(queryText)
+
+    _, err := db.Exec(queryText, id)
+    return err
+}
+
+func insertObject(db *sql.DB, object string, model map[string]interface{}) error {
+    props := make([]string, 0, len(model))
+    placeholders := make([]string, 0, len(model))
+    values := make([]interface{}, 0, len(model))
+
+    for prop, value := range model {
+        if (prop == "__class") {
+            continue
+        }
+        props = append(props, fmt.Sprintf(`"%s"`, prop))
+        placeholders = append(placeholders, fmt.Sprintf("$%d", len(placeholders)+1))
+        values = append(values, value)
+    }
+
+    queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
+    fmt.Println(queryText)
+
+    _, err := db.Exec(queryText, values...)
+    return err
+}
+
+func updateObject(db *sql.DB, object string, id string, changes map[string]Change) error {
+    i := 1
+    colQuery := ""
+    updateVals := make([]interface{}, 0, len(changes))
+    for prop, change := range changes {
+        if (i > 1) {
+            colQuery += " AND "
+        }
+        colQuery += fmt.Sprintf(`"%s" = $%d`, prop, i)
+        updateVals = append(updateVals, change.Updated)
+        i++
+    }
+    queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
+    fmt.Println(queryText)
+    _, err := db.Exec(queryText, append(updateVals, id)...)
     return err;
 }
 
@@ -239,79 +282,158 @@ func getUserAsJson(db *sql.DB, id string) (string, error) {
     return res, nil
 }
 
+type ChangeRequest struct {
+    id *string;
+    changeType *string;
+    modelId *string;
+    modelType *string;
+    changeSnapshot *ChangeSnapshot;
+
+}
+
+type Change struct {
+	Original string `json:"original"`
+	Updated  string `json:"updated"`
+}
+
+type ChangeSnapshot struct {
+	Changes map[string]Change `json:"changes"`
+}
+
+type RequestBody struct {
+	ID            string                    `json:"id"`
+	ChangeType    string                    `json:"changeType"`
+	ModelType     string                    `json:"modelType"`
+	ModelID       string                    `json:"modelId"`
+	Model         map[string]interface{}    `json:"model"`
+	ChangeSnapshot ChangeSnapshot           `json:"changeSnapshot"`
+}
+
+func parseJSONFromBody(r *http.Request) (RequestBody, error) {
+	var reqBody RequestBody
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return reqBody, err
+	}
+	err = json.Unmarshal(body, &reqBody)
+	if err != nil {
+		return reqBody, err
+	}
+	return reqBody, nil
+}
+
 // Sample handler for changes
 func handleChange(w http.ResponseWriter, r *http.Request) {
 	// Parse the JSON body from the request
-	var requestBody map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
+    requestBody, err := parseJSONFromBody(r)
+    if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	// Extract the new email address from the JSON body
-    id := requestBody["modelId"].(string)
-	changeSnapshot := requestBody["changeSnapshot"].(map[string]interface{})
-	changes := changeSnapshot["changes"].(map[string]interface{})
-	emailChanges := changes["email"].(map[string]interface{})
-	newEmail := emailChanges["updated"].(string)
-    changeType := requestBody["type"].(string)
-
+    }
+    w.Header().Set("Content-Type", "application/json")
+    
 	db := getConn()
 	defer db.Close()
 
-    // Update the value in the DB.
-    if err := updateEmail(db, newEmail, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-    }
-    updatedUser, err := getUserAsJson(db, id)
-    if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-    }
+	// Extract the new email address from the JSON body
+    id := requestBody.ModelID;
+    modelType := requestBody.ModelType;
+    changeType := requestBody.ChangeType;
+    switch (changeType) {
+    case "update":
+        changes := requestBody.ChangeSnapshot.Changes;
+        // fmt.Printf("Got change snapshot changes %+v", changes);
 
-	// Implement logic to apply a change to the data model
-    broadcastChange(fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedUser))
+        if err := updateObject(db, modelType, id, changes); err != nil {
+            fmt.Println(err.Error());
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return;
+        }
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(updatedUser))
+        fmt.Println("Getting user " + id)
+        updatedUser, err := getUserAsJson(db, id)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return;
+        }
+        fmt.Printf("Got user %s\n", updatedUser);
+        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedUser)
+        fmt.Println(changeToBroadcast)
+
+        // Implement logic to apply a change to the data model
+        broadcastChange(changeToBroadcast)
+        w.Write([]byte(updatedUser))
+        break
+    case "create":
+        // Insert into database.
+        model := requestBody.Model;
+        if err := insertObject(db, modelType, model); err != nil {
+            fmt.Println(err.Error());
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return;
+        }
+        jsonData, err := json.Marshal(model)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return;
+        }
+        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, jsonData)
+
+        broadcastChange(changeToBroadcast)
+        w.Write([]byte(jsonData))
+        break
+    case "delete":
+        if err := deleteObject(db, modelType, id); err != nil {
+            fmt.Println(err.Error());
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return;
+        }
+        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s"}}`, changeType, id)
+        broadcastChange(changeToBroadcast)
+        w.Write([]byte(fmt.Sprintf(`{"id", "%s"}`, id)))
+        // Handle delete
+        break
+    default:
+        http.Error(w, "Invalid change type", http.StatusBadRequest)
+    }
 }
 
 // Sample handler for syncing
 func handleSync(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Could not open websocket connection because %v", err), http.StatusBadRequest)
-		return
-	}
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Could not open websocket connection because %v", err), http.StatusBadRequest)
+        return
+    }
 
-	connLock.Lock()
-	connections[conn] = true
-	connLock.Unlock()
+    connLock.Lock()
+    connections[conn] = true
+    connLock.Unlock()
 
-	defer func() {
-		connLock.Lock()
-		delete(connections, conn)
-		connLock.Unlock()
-		conn.Close()
-	}()
+    defer func() {
+        connLock.Lock()
+        delete(connections, conn)
+        connLock.Unlock()
+        conn.Close()
+    }()
 
-	for {
-		_, _, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-	}
+    for {
+        _, _, err := conn.ReadMessage()
+        if err != nil {
+            break
+        }
+    }
 }
 
 func broadcastChange(message string) {
-	connLock.Lock()
-	defer connLock.Unlock()
+    connLock.Lock()
+    defer connLock.Unlock()
 
-	for conn := range connections {
-		err := conn.WriteMessage(websocket.TextMessage, []byte(message))
-		if err != nil {
-			conn.Close()
-			delete(connections, conn)
-		}
-	}
+    for conn := range connections {
+        err := conn.WriteMessage(websocket.TextMessage, []byte(message))
+        if err != nil {
+            conn.Close()
+            delete(connections, conn)
+        }
+    }
 }

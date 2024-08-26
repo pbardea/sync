@@ -70,10 +70,14 @@ export class MockApi implements ApiIface {
     if (!this.pool) {
       this.pool = ApiTestingPool.getInstance();
     }
-    const changedRecord = this.pool.get(change.modelId).getJson();
+    const changeObject = this.pool.get(change.modelId)
+    if (changeObject === undefined) {
+        return;
+    }
+    const changedRecord = changeObject.getJson();
     // Indicate that this is the latest change the server has seen.
     changedRecord.lastModifiedDate = new Date().toISOString();
-    this.messagesToSend.push({ type: change.type, jsonObject: changedRecord });
+    this.messagesToSend.push({ type: change.changeType, jsonObject: changedRecord });
     // Accept the change and transform it as a message to send on the queue.
     // TODO: Create a copy of the pool and maintain one server side?
     // Then you can call apply()? Or maybe just move the apply defn here?
