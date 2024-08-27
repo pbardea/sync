@@ -54,17 +54,11 @@ const App = observer((props: { team: Team }) => {
                 return;
             }
 
-            console.log("Updating");
-            console.log(isObservable(selectedUser));
-
             // FIXME: This update isn't triggering mobx.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (selectedUser as any)[selectedField] = (
                 e.target as HTMLInputElement
             ).value;
-            console.log("Updated");
-            console.log(isObservable(selectedUser));
-            console.log("Triggering");
             debouncedSave(selectedUser);
         },
         [selectedField, selectedUser, debouncedSave],

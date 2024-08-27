@@ -162,18 +162,20 @@ func writeObject(db *sql.DB, object string, cols []string) ([]map[string]interfa
         data := make(map[string]interface{})
         data["__class"] = strings.ToUpper(object[:1]) + object[1:]
         for i, v := range values {
-            fmt.Println(object)
-            fmt.Println(v)
-            x := v.(string)
-
-            if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
-                data[columns[i]] = nx
-            } else if b, ok := strconv.ParseBool(string(x)); ok == nil {
-                data[columns[i]] = b
-            } else if "string" == fmt.Sprintf("%T", string(x)) {
-                data[columns[i]] = string(x)
+            // TODO: Clean up
+            if "int64" == fmt.Sprintf("%T", v) {
+                data[columns[i]] = v
             } else {
-                fmt.Printf("Failed on if for type %T of %v\n", x, x)
+                x := v.(string)
+                if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
+                    data[columns[i]] = nx
+                } else if b, ok := strconv.ParseBool(string(x)); ok == nil {
+                    data[columns[i]] = b
+                } else if "string" == fmt.Sprintf("%T", string(x)) {
+                    data[columns[i]] = string(x)
+                } else {
+                    fmt.Printf("Failed on if for type %T of %v\n", x, x)
+                }
             }
         }
         // if err := json.NewEncoder(w).Encode(data); err != nil {
@@ -188,12 +190,9 @@ func writeObject(db *sql.DB, object string, cols []string) ([]map[string]interfa
 
 // Sample handler for bootstrap
 func handleBootstrap(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Handling bootstrap")
 	// Example of accessing claims from context
 	// username := r.Context().Value("username").(string)
 	// team := r.Context().Value("team").(string)
-
-	// fmt.Printf("User %s from team %s requested bootstrap\n", username, team)
 
 	db := getConn()
 	defer db.Close()
@@ -203,12 +202,12 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Think about schema changes. Probably is worth an RFD.
 	// TODO: Filter this down for permissions. Also worth an RFD.
     finalArr := make([]map[string]interface{}, 0)
-    if dataArr, err := writeObject(db, "team", []string{"id", "name"}); err != nil {
+    if dataArr, err := writeObject(db, "team", []string{"id", "name", "version"}); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
     } else {
         finalArr = append(finalArr, dataArr...)
     }
-    if dataArr, err := writeObject(db, "user", []string{"id", "name", "email", "teamId"}); err != nil {
+    if dataArr, err := writeObject(db, "user", []string{"id", "name", "email", "teamId", "version"}); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
     } else {
         finalArr = append(finalArr, dataArr...)
@@ -221,7 +220,6 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 
 func deleteObject(db *sql.DB, object string, id string) error {
     queryText := fmt.Sprintf(`DELETE FROM "%s" WHERE id = $1`, strings.ToLower(object))
-    fmt.Println(queryText)
 
     _, err := db.Exec(queryText, id)
     return err
@@ -250,7 +248,6 @@ func insertObject(db *sql.DB, object string, model map[string]interface{}) error
     }
 
     queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
-    fmt.Println(queryText)
 
     _, err := db.Exec(queryText, values...)
     return err
@@ -292,25 +289,59 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
     i++
     
     queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
-    fmt.Println(queryText)
     _, err = db.Exec(queryText, append(updateVals, lastModifiedDate, id)...)
     return err;
 }
 
-func getUserAsJson(db *sql.DB, id string) (string, error) {
-    queryText := `SELECT id, name, email, "teamId", "lastModifiedDate", "version" FROM "user" WHERE id = $1`
-    row := db.QueryRow(queryText, id)
-    var idVal string
-    var name string
-    var email string
-    var teamId string
-    var lastModifiedDate string
-    var version int
-    if err := row.Scan(&idVal, &name, &email, &teamId, &lastModifiedDate, &version); err != nil {
+type Schema map[string]interface{}
+
+func getObjectAsJson(db *sql.DB, objectName string, id string) (string, error) {
+    query := fmt.Sprintf(`SELECT * FROM "%s" WHERE id = $1`, strings.ToLower(objectName))
+    rows, err := db.Query(query, id)
+    if err != nil {
         return "", err
     }
-    res := fmt.Sprintf(`{"id":"%s", "name": "%s","email":"%s","teamId": "%s", "__class": "User", "lastModifiedDate": "%s", "version": %d}`, idVal, name, email, teamId, lastModifiedDate, version)
-    return res, nil
+    defer rows.Close()
+
+    // Fetch column names
+    columns, err := rows.Columns()
+    if err != nil {
+        return "", err
+    }
+
+    // Create a slice of interfaces to hold the column values
+    values := make([]interface{}, len(columns))
+    valuePtrs := make([]interface{}, len(columns))
+    for i := range values {
+        valuePtrs[i] = &values[i]
+    }
+
+    // Initialize a map to store the schema
+    schema := Schema{}
+
+    // Iterate over the result set (in this case, there should be only one row)
+    if rows.Next() {
+        // Scan the row into the value pointers
+        if err := rows.Scan(valuePtrs...); err != nil {
+            return "", err
+        }
+
+        // Populate the schema map with column names and their corresponding values
+        for i, column := range columns {
+            schema[column] = values[i]
+        }
+    } else {
+        return "", fmt.Errorf("no results found for ID %s", id)
+    }
+    schema["__class"] = objectName
+
+    // Convert the schema map to JSON
+    jsonData, err := json.Marshal(schema)
+    if err != nil {
+        return "", err
+    }
+
+    return string(jsonData), nil
 }
 
 type ChangeRequest struct {
@@ -323,73 +354,68 @@ type ChangeRequest struct {
 }
 
 type Change struct {
-	Original string `json:"original"`
-	Updated  string `json:"updated"`
+    Original string `json:"original"`
+    Updated  string `json:"updated"`
 }
 
 type ChangeSnapshot struct {
-	Changes map[string]Change `json:"changes"`
+    Changes map[string]Change `json:"changes"`
 }
 
 type RequestBody struct {
-	ID            string                    `json:"id"`
-	ChangeType    string                    `json:"changeType"`
-	ModelType     string                    `json:"modelType"`
-	ModelID       string                    `json:"modelId"`
-	Model         map[string]interface{}    `json:"model"`
-	ChangeSnapshot ChangeSnapshot           `json:"changeSnapshot"`
+    ID            string                    `json:"id"`
+    ChangeType    string                    `json:"changeType"`
+    ModelType     string                    `json:"modelType"`
+    ModelID       string                    `json:"modelId"`
+    Model         map[string]interface{}    `json:"model"`
+    ChangeSnapshot ChangeSnapshot           `json:"changeSnapshot"`
 }
 
 func parseJSONFromBody(r *http.Request) (RequestBody, error) {
-	var reqBody RequestBody
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return reqBody, err
-	}
-	err = json.Unmarshal(body, &reqBody)
-	if err != nil {
-		return reqBody, err
-	}
-	return reqBody, nil
+    var reqBody RequestBody
+    body, err := io.ReadAll(r.Body)
+    if err != nil {
+        return reqBody, err
+    }
+    err = json.Unmarshal(body, &reqBody)
+    if err != nil {
+        return reqBody, err
+    }
+    return reqBody, nil
 }
 
 // Sample handler for changes
 func handleChange(w http.ResponseWriter, r *http.Request) {
-	// Parse the JSON body from the request
+    // Parse the JSON body from the request
     requestBody, err := parseJSONFromBody(r)
     if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
     }
     w.Header().Set("Content-Type", "application/json")
-    
-	db := getConn()
-	defer db.Close()
 
-	// Extract the new email address from the JSON body
+    db := getConn()
+    defer db.Close()
+
+    // Extract the new email address from the JSON body
     id := requestBody.ModelID;
     modelType := requestBody.ModelType;
     changeType := requestBody.ChangeType;
     switch (changeType) {
     case "update":
         changes := requestBody.ChangeSnapshot.Changes;
-        // fmt.Printf("Got change snapshot changes %+v", changes);
 
         if err := updateObject(db, modelType, id, changes); err != nil {
-            fmt.Println(err.Error());
             http.Error(w, err.Error(), http.StatusBadRequest)
             return;
         }
 
-        fmt.Println("Getting user " + id)
-        updatedUser, err := getUserAsJson(db, id)
+        updatedUser, err := getObjectAsJson(db, "User", id)
         if err != nil {
             http.Error(w, err.Error(), http.StatusBadRequest)
             return;
         }
-        fmt.Printf("Got user %s\n", updatedUser);
         changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedUser)
-        fmt.Println(changeToBroadcast)
 
         // Implement logic to apply a change to the data model
         broadcastChange(changeToBroadcast)
@@ -399,7 +425,6 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
         // Insert into database.
         model := requestBody.Model;
         if err := insertObject(db, modelType, model); err != nil {
-            fmt.Println(err.Error());
             http.Error(w, err.Error(), http.StatusBadRequest)
             return;
         }
@@ -415,7 +440,6 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
         break
     case "delete":
         if err := deleteObject(db, modelType, id); err != nil {
-            fmt.Println(err.Error());
             http.Error(w, err.Error(), http.StatusBadRequest)
             return;
         }
