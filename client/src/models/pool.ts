@@ -244,13 +244,23 @@ export class ObjectPool {
                     // console.debug(`Couldn't find element when applying`);
                     return;
                 }
-                const serverDate = new Date(jsonObject.lastModifiedDate);
-                const localDate = new Date(elem.lastModifiedDate ?? 0);
-                if (serverDate.getTime() < localDate.getTime()) {
-                    // Server change is outdated. Ignore.
-                    // console.debug("Ignoring update from server - I have a more recent v");
-                    return;
+                const serverVersion = jsonObject.version;
+                const localVersion = elem.version;
+                console.log("Server version: " + serverVersion);
+                console.log("Local version: " + serverVersion);
+                if (serverVersion <= localVersion) {
+                    // We already have this change applied
+                    return
                 }
+                // const serverDate = new Date(jsonObject.lastModifiedDate);
+                // const localDate = new Date(elem.lastModifiedDate ?? 0);
+                // console.log("Server date: " + serverDate.getMilliseconds());
+                // console.log("Local date: " + localDate.getMilliseconds());
+                // if (serverDate.getTime() <= localDate.getTime()) {
+                //     // Server change is outdated. Ignore.
+                //     // console.debug("Ignoring update from server - I have a more recent v");
+                //     return;
+                // }
 
                 // To update top references, I need to support that lazy sorting I
                 // was talkign about. Let's try a user.
@@ -324,7 +334,18 @@ export class ObjectPool {
         }
         try {
             // Make an async request to change?.
-            await this.apiClient.change(change);
+            const res = await this.apiClient.change(change);
+
+            // Set the local ts.
+            const target = this.pool[change.modelId]
+            // TODO: Is this what we want to do?
+            // I think that we want to 
+            target.lastModifiedDate = new Date(res.lastModifiedDate)
+
+            // TODO: Get a timestamp from the server acc'ing. This should be the timestamp
+            // set on the local model. This way it doesn't need to wait for the updates coming
+            // over the websocket.
+
             // If we get a success, that means that the change was accepted. We can
             // remove this from the local persistance because if we refresh we'll
             // get the latest from the server.
@@ -354,7 +375,7 @@ export class ObjectPool {
             }
             case "create": {
                 const o = this.pool[change.model.id];
-                o.delete();
+                o.delete(true); // We don't need to send the delete to the server.
                 break;
             }
             case "delete": {

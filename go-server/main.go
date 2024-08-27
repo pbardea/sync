@@ -227,6 +227,14 @@ func deleteObject(db *sql.DB, object string, id string) error {
     return err
 }
 
+func getVersion(db *sql.DB, object string, id string) (int, error) {
+    queryText := fmt.Sprintf(`SELECT version FROM "%s" WHERE id = $1`, strings.ToLower(object))
+    row := db.QueryRow(queryText, id)
+    var version int
+    err := row.Scan(&version)
+    return version, err
+}
+
 func insertObject(db *sql.DB, object string, model map[string]interface{}) error {
     props := make([]string, 0, len(model))
     placeholders := make([]string, 0, len(model))
@@ -249,36 +257,59 @@ func insertObject(db *sql.DB, object string, model map[string]interface{}) error
 }
 
 func updateObject(db *sql.DB, object string, id string, changes map[string]Change) error {
+    serverVersion, err := getVersion(db, object, id)
+    if err != nil {
+        return err
+    }
+    incomingVersion, err := strconv.Atoi(changes["version"].Updated)
+    if err != nil {
+        return err
+    }
+    finalVersion := strconv.Itoa(incomingVersion)
+    if (serverVersion < incomingVersion) {
+        // We've had writes since this client has seen this change.
+        // We're doing last write wins, so we're going to call this the latest version.
+        finalVersion = strconv.Itoa(serverVersion + 1)
+    }
+
     i := 1
     colQuery := ""
     updateVals := make([]interface{}, 0, len(changes))
     for prop, change := range changes {
         if (i > 1) {
-            colQuery += " AND "
+            colQuery += ", "
         }
         colQuery += fmt.Sprintf(`"%s" = $%d`, prop, i)
-        updateVals = append(updateVals, change.Updated)
+        if (prop == "version") {
+            updateVals = append(updateVals, finalVersion)
+        } else {
+            updateVals = append(updateVals, change.Updated)
+        }
         i++
     }
+    lastModifiedDate := time.Now().Format(time.RFC3339)
+    colQuery += fmt.Sprintf(`, "%s" = $%d`, "lastModifiedDate", i)
+    i++
+    
     queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
     fmt.Println(queryText)
-    _, err := db.Exec(queryText, append(updateVals, id)...)
+    _, err = db.Exec(queryText, append(updateVals, lastModifiedDate, id)...)
     return err;
 }
 
 func getUserAsJson(db *sql.DB, id string) (string, error) {
-    queryText := `SELECT id, name, email, "teamId" FROM "user" WHERE id = $1`
+    queryText := `SELECT id, name, email, "teamId", "lastModifiedDate", "version" FROM "user" WHERE id = $1`
     row := db.QueryRow(queryText, id)
     var idVal string
     var name string
     var email string
     var teamId string
-    lastModifiedDate := time.Now().Format(time.RFC3339)
-    err := row.Scan(&idVal, &name, &email, &teamId)
-    if err != nil {
+    var lastModifiedDate string
+    var version int
+    if err := row.Scan(&idVal, &name, &email, &teamId, &lastModifiedDate, &version); err != nil {
         return "", err
     }
-    res := fmt.Sprintf(`{"id":"%s", "name": "%s","email":"%s","teamId": "%s", "__class": "User", "lastModifiedDate": "%s"}`, idVal, name, email, teamId, lastModifiedDate)
+    res := fmt.Sprintf(`{"id":"%s", "name": "%s","email":"%s","teamId": "%s", "__class": "User", "lastModifiedDate": "%s", "version": %d}`, idVal, name, email, teamId, lastModifiedDate, version)
     return res, nil
 }
 

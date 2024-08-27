@@ -3,7 +3,20 @@ import "./App.css";
 import { observer } from "mobx-react";
 import { Team } from "./models/team";
 import { User } from "./models/user";
-import { computed } from "mobx";
+import { computed, isObservable } from "mobx";
+
+const debounce = (callback: Function, wait: number) => {
+    let timeoutId: number | undefined = undefined;
+    return (...args: unknown[]) => {
+        console.log("Clearing timeout " + timeoutId);
+        window.clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => {
+            console.log("Actually calling save");
+            callback(...args);
+        }, wait);
+        console.log("Timeout ID: " + timeoutId)
+    };
+};
 
 const App = observer((props: { team: Team }) => {
     const [count, setCount] = useState(0);
@@ -29,20 +42,32 @@ const App = observer((props: { team: Team }) => {
         return computed(() => members.find((x) => x.id === selectedUserId));
     }, [members, selectedUserId]).get();
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const debouncedSave = useCallback(debounce((selectedUser: User) => {
+        console.log("SAVING");
+        selectedUser.save();
+    }, 200), []);
+
     const handleInputChange = useCallback(
         (e: ChangeEvent) => {
             if (!selectedUser) {
                 return;
             }
 
+            console.log("Updating");
+            console.log(isObservable(selectedUser));
+
             // FIXME: This update isn't triggering mobx.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (selectedUser as any)[selectedField] = (
                 e.target as HTMLInputElement
             ).value;
-            selectedUser.save();
+            console.log("Updated");
+            console.log(isObservable(selectedUser));
+            console.log("Triggering");
+            debouncedSave(selectedUser);
         },
-        [selectedField, selectedUser],
+        [selectedField, selectedUser, debouncedSave],
     );
 
     const createNewUser = useCallback(() => {
