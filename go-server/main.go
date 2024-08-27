@@ -129,13 +129,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"token": "%s"}`, tokenString)))
 }
 
-func writeObject(db *sql.DB, object string, cols []string) ([]map[string]interface{}, error) {
-    escapedCols := make([]string, len(cols))
-    for i, x := range cols {
-        escapedCols[i] = "\"" + x + "\""
-    }
-
-    queryText := fmt.Sprintf(`SELECT %s FROM "%s"`, strings.Join(escapedCols, ", "), object)
+func writeObject(db *sql.DB, object string) ([]map[string]interface{}, error) {
+    // TODO: This is a bad practice, but an effecitve hack.
+    queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
     rows, err := db.Query(queryText)
     if err != nil {
         return nil, err
@@ -162,8 +158,14 @@ func writeObject(db *sql.DB, object string, cols []string) ([]map[string]interfa
         data := make(map[string]interface{})
         data["__class"] = strings.ToUpper(object[:1]) + object[1:]
         for i, v := range values {
+            fmt.Printf("%T\n", v)
+            if (v == nil) {
+                continue
+            }
             // TODO: Clean up
             if "int64" == fmt.Sprintf("%T", v) {
+                data[columns[i]] = v
+            } else if "time.Time" == fmt.Sprintf("%T", v) {
                 data[columns[i]] = v
             } else {
                 x := v.(string)
@@ -202,15 +204,14 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Think about schema changes. Probably is worth an RFD.
 	// TODO: Filter this down for permissions. Also worth an RFD.
     finalArr := make([]map[string]interface{}, 0)
-    if dataArr, err := writeObject(db, "team", []string{"id", "name", "version"}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-    } else {
-        finalArr = append(finalArr, dataArr...)
-    }
-    if dataArr, err := writeObject(db, "user", []string{"id", "name", "email", "teamId", "version"}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-    } else {
-        finalArr = append(finalArr, dataArr...)
+
+    objectsToBootstrap := []string{"Team", "User"}
+    for _, object := range objectsToBootstrap {
+        if dataArr, err := writeObject(db, object); err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+        } else {
+            finalArr = append(finalArr, dataArr...)
+        }
     }
 
     if err := json.NewEncoder(w).Encode(finalArr); err != nil {
