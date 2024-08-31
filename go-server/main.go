@@ -285,12 +285,9 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
         }
         i++
     }
-    lastModifiedDate := time.Now().Format(time.RFC3339)
-    colQuery += fmt.Sprintf(`, "%s" = $%d`, "lastModifiedDate", i)
-    i++
     
     queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
-    _, err = db.Exec(queryText, append(updateVals, lastModifiedDate, id)...)
+    _, err = db.Exec(queryText, append(updateVals, id)...)
     return err;
 }
 

@@ -21,6 +21,29 @@ save() -> emits the remote changes as a txn
 paul bardea (local)
 save() -> emits another change set
 
+## Figure out writing to local storage
+
+- Create a database
+- Create objects
+- Save objects
+
+Data flow:
+
+- bootstrap() -> Received data model is written to the data store
+- addChange() -> Transaction is written down to storage
+
+Startup:
+
+- Do I have data locally?
+
+  - YES: Request a delta bootstrap that sends back all of the objects that have been modified since
+    a particular version. Update indexdb with the new models.
+  - NO: Request a full bootstrap and write the response to indexdb.
+
+- Change is made: make it in memory
+
+- Applying change from server -> Update the relevant model in indexdb.
+
 ## Server Endpoints
 
 Authentication: Custom JWT. I just need a username and team.
@@ -30,11 +53,9 @@ Authentication: Custom JWT. I just need a username and team.
 Finds all of the elements that I have access to (e.g. Inside my team).
 Return (eventually stream) an array of all of the JSON objects.
 
-
 ### POST /change
 
 Takes a change in and applies it dynamically to the correct data model.
-
 
 ### LISTEN /sync
 

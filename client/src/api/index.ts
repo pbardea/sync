@@ -36,6 +36,7 @@ export class MockApi implements ApiIface {
                     name: "Paul Bardea",
                     teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
                     lastModifiedDate: new Date().toISOString(),
+                    version: 1,
                     __class: "User",
                 },
                 {
@@ -44,12 +45,14 @@ export class MockApi implements ApiIface {
                     email: "paul@pbardea.com",
                     teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
                     lastModifiedDate: new Date().toISOString(),
+                    version: 1,
                     __class: "User",
                 },
                 {
                     id: "279592c1-2334-430b-b97f-a8f9265d4805",
                     name: "Team A",
                     lastModifiedDate: new Date().toISOString(),
+                    version: 1,
                     __class: "Team",
                 },
                 {
@@ -57,6 +60,7 @@ export class MockApi implements ApiIface {
                     name: "Orphan",
                     email: "paul@pbardea.com",
                     lastModifiedDate: new Date().toISOString(),
+                    version: 1,
                     __class: "User",
                 },
             ],
@@ -67,6 +71,7 @@ export class MockApi implements ApiIface {
         if (!this.pool) {
             this.pool = ApiTestingPool.getInstance();
         }
+        const oldVersion = this.pool.get(change.modelId).version
         this.pool.apply(change);
         if (!this.pool) {
             this.pool = ApiTestingPool.getInstance();
@@ -75,7 +80,7 @@ export class MockApi implements ApiIface {
         if (changeObject === undefined) {
             throw new Error("Entity was deleted");
         }
-        changeObject.version += 1;
+        changeObject.version = Math.max(oldVersion, changeObject.version) + 1;
         changeObject.lastModifiedDate = new Date();
         const changedRecord = changeObject.getJson();
         this.messagesToSend.push({

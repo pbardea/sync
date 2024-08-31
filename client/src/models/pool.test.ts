@@ -22,6 +22,7 @@ describe("object pool", () => {
             name: "Paul Bardea",
             teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
             lastModifiedDate: new Date().toISOString(),
+            version: 1,
             __class: "User",
         },
         {
@@ -30,12 +31,14 @@ describe("object pool", () => {
             email: "paul@pbardea.com",
             teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
             lastModifiedDate: new Date().toISOString(),
+            version: 1,
             __class: "User",
         },
         {
             id: "279592c1-2334-430b-b97f-a8f9265d4805",
             name: "Team A",
             lastModifiedDate: new Date().toISOString(),
+            version: 1,
             __class: "Team",
         },
         {
@@ -43,6 +46,7 @@ describe("object pool", () => {
             name: "Orphan",
             email: "paul@pbardea.com",
             lastModifiedDate: new Date().toISOString(),
+            version: 1,
             __class: "User",
         },
     ];
@@ -147,6 +151,10 @@ describe("object pool", () => {
                         original: "",
                         updated: "paul@pbardea.com",
                     },
+                    version: {
+                        original: "1",
+                        updated: "2",
+                    },
                 },
             },
         });
@@ -168,6 +176,10 @@ describe("object pool", () => {
                         original: null,
                         updated: teamA.id,
                     },
+                    version: {
+                        original: "2",
+                        updated: "3",
+                    },
                 },
             },
         });
@@ -186,6 +198,10 @@ describe("object pool", () => {
                     teamId: {
                         original: teamA.id,
                         updated: null,
+                    },
+                    version: {
+                        original: "3",
+                        updated: "4",
                     },
                 },
             },
@@ -212,6 +228,10 @@ describe("object pool", () => {
                         original: null,
                         updated: teamA.id,
                     },
+                    version: {
+                        original: "4",
+                        updated: "5",
+                    },
                 },
             },
         });
@@ -230,6 +250,10 @@ describe("object pool", () => {
                     teamId: {
                         original: teamA.id,
                         updated: teamB.id,
+                    },
+                    version: {
+                        original: "5",
+                        updated: "6",
                     },
                 },
             },
@@ -272,6 +296,7 @@ describe("object pool", () => {
             email: "paul@pbardea.com",
             teamId: "279592c1-2334-430b-b97f-a8f9265d4805",
             lastModifiedDate: "2024-08-21T15:30:00Z",
+            version: 0,
             __class: "User",
         };
         pool.applyServerUpdate({ type: "update", jsonObject: staleUpdate });

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-    import { Change, ObjectPool } from "./pool";
+import { Change, ObjectPool } from "./pool";
 import { JsonModel } from "../api";
 import { action, makeObservable, observable } from "mobx";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
@@ -29,11 +29,11 @@ export function ManyToOne(fkName: string) {
         }
         metadata[refKey][idKey] = true;
 
-        addInitializer(function () {
+        addInitializer(function() {
             let entity: any = undefined;
             Object.defineProperty(this, name, {
                 get: () => entity,
-                    set: (newVal: any) => {
+                set: (newVal: any) => {
                     const oldId = this[idKey];
                     const newId = newVal?.id;
 
@@ -100,7 +100,7 @@ export function ClientModel(modelName: string) {
             let stored: any = undefined;
             Object.defineProperty(target, originalKey, {
                 get: () => stored,
-                    set: (newVal: any) => {
+                set: (newVal: any) => {
                     stored = newVal;
                 },
                 enumerable: true,
@@ -110,7 +110,7 @@ export function ClientModel(modelName: string) {
 
         const refKeys = Object.keys(metadata[refKey] ?? {});
 
-        target.prototype.delete = function (serverChange = false) {
+        target.prototype.delete = function(serverChange = false) {
             // Remove it from the pool first
             this._pool.delete(this.id);
 
@@ -137,14 +137,14 @@ export function ClientModel(modelName: string) {
             this._save(true);
         };
 
-        target.prototype.getJson = function () {
+        target.prototype.getJson = function() {
             // Remove all references.
             const o = JSON.parse(
                 JSON.stringify(this, (key, value) => {
                     if (
                         key &&
                         (key.startsWith("_") ||
-                         refKeys.map((x) => x.slice(0, -2)).includes(key))
+                            refKeys.map((x) => x.slice(0, -2)).includes(key))
                     ) {
                         return undefined;
                     }
@@ -159,7 +159,7 @@ export function ClientModel(modelName: string) {
             return o;
         };
 
-        target.prototype._save = function (serverChange: boolean) {
+        target.prototype._save = function(serverChange: boolean) {
             let change: Change;
             const original = this[originalKey];
 
@@ -206,7 +206,7 @@ export function ClientModel(modelName: string) {
             }
         };
 
-        target.prototype.save = function () {
+        target.prototype.save = function() {
             // A client has made a change.
             // On the server, if a new change comes in with an older version, it will
             // respond with the lastest version + 1
@@ -218,7 +218,7 @@ export function ClientModel(modelName: string) {
 
 // Base class.
 export class Model {
-    static init() {}
+    static init() { }
 
     @observable
     @Property()
