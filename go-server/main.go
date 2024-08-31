@@ -55,6 +55,7 @@ func main() {
 	// Authenticated endpoints
 	// r.Use(authMiddleware)
 	r.HandleFunc("/bootstrap", handleBootstrap).Methods("GET")
+	r.HandleFunc("/delta-bootstrap", handleDeltaBootstrap).Methods("GET")
 	r.HandleFunc("/change", handleChange).Methods("POST")
 	r.HandleFunc("/sync", handleSync)
 
@@ -130,9 +131,19 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeObject(db *sql.DB, object string) ([]map[string]interface{}, error) {
+    return writeObjectDelta(db, object, nil)
+}
+
+func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
     // TODO: This is a bad practice, but an effecitve hack.
     queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
-    rows, err := db.Query(queryText)
+    args := make([]any, 0)
+    if start != nil {
+        queryText += fmt.Sprintf(` WHERE "lastModifiedDate" > $1`)
+        args = append(args, start)
+    }
+
+    rows, err := db.Query(queryText, args...)
     if err != nil {
         return nil, err
     }
@@ -208,6 +219,41 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
     objectsToBootstrap := []string{"Team", "User"}
     for _, object := range objectsToBootstrap {
         if dataArr, err := writeObject(db, object); err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+        } else {
+            finalArr = append(finalArr, dataArr...)
+        }
+    }
+
+    if err := json.NewEncoder(w).Encode(finalArr); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+    }
+}
+
+func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
+	// Example of accessing claims from context
+	// username := r.Context().Value("username").(string)
+	// team := r.Context().Value("team").(string)
+    
+    startTime := r.URL.Query().Get("start_time")
+    start, err := time.Parse(time.RFC3339, startTime)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+
+	db := getConn()
+	defer db.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	// TODO: Think about schema changes. Probably is worth an RFD.
+	// TODO: Filter this down for permissions. Also worth an RFD.
+    finalArr := make([]map[string]interface{}, 0)
+
+    objectsToBootstrap := []string{"Team", "User"}
+    for _, object := range objectsToBootstrap {
+        if dataArr, err := writeObjectDelta(db, object, &start); err != nil {
             http.Error(w, err.Error(), http.StatusBadRequest)
         } else {
             finalArr = append(finalArr, dataArr...)
