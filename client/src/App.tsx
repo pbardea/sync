@@ -78,7 +78,6 @@ const App = observer((props: { team: Team }) => {
             return;
         }
         selectedUser.delete();
-        selectedUser.save();
     }, [selectedUser]);
 
     return (

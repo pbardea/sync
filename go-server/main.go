@@ -446,7 +446,7 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
         }
         changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s"}}`, changeType, id)
         broadcastChange(changeToBroadcast)
-        w.Write([]byte(fmt.Sprintf(`{"id", "%s"}`, id)))
+        w.Write([]byte(fmt.Sprintf(`{"id": "%s"}`, id)))
         // Handle delete
         break
     default:

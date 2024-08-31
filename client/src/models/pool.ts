@@ -246,8 +246,6 @@ export class ObjectPool {
                 }
                 const serverVersion = jsonObject.version;
                 const localVersion = elem.version;
-                console.log("Server version: " + serverVersion);
-                console.log("Local version: " + serverVersion);
                 if (serverVersion <= localVersion) {
                     // We already have this change applied
                     return
@@ -334,13 +332,9 @@ export class ObjectPool {
         }
         try {
             // Make an async request to change?.
-            const res = await this.apiClient.change(change);
+            await this.apiClient.change(change);
 
-            // Set the local ts.
-            const target = this.pool[change.modelId]
-            // TODO: Is this what we want to do?
-            // I think that we want to 
-            target.lastModifiedDate = new Date(res.lastModifiedDate)
+            // I don't think that we need the server version with Lamport timestamps.
 
             // TODO: Get a timestamp from the server acc'ing. This should be the timestamp
             // set on the local model. This way it doesn't need to wait for the updates coming
@@ -366,6 +360,10 @@ export class ObjectPool {
         switch (change.changeType) {
             case "update": {
                 const target = this.pool[change.modelId];
+                if (!target) {
+                    // If we deleted the object, an undo to an edit doesn't make sense.
+                    break;
+                }
                 for (const property in change.changeSnapshot.changes) {
                     const changeSnapshot = change.changeSnapshot.changes[property];
                     // TODO: Probably a better way to do this.
