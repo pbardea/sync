@@ -47,10 +47,10 @@
  *
  */
 
-import { v4 } from "uuid";
 import { ApiIface, JsonModel } from "../api";
 import { Model } from "./base";
-import { computed, makeObservable, observable } from "mobx";
+import { action, computed, makeObservable, observable } from "mobx";
+import { localDB } from "./indexdb";
 
 // TODO: Is BaseChange needed here?
 export type Change = BaseChange &
@@ -68,13 +68,13 @@ type ChangeSnapshot = {
 };
 
 interface BaseChange {
-    id: string;
+    id: number;
     modelType: string;
     modelId: string;
 }
 
 class UpdateChange implements BaseChange {
-    id = v4();
+    id = 0;
     changeType = "update" as const;
     modelType: string;
     modelId: string;
@@ -93,7 +93,7 @@ class UpdateChange implements BaseChange {
 }
 
 class CreateChange implements BaseChange {
-    id = v4();
+    id = 0;
     changeType = "create" as const;
     modelType: string;
     modelId: string;
@@ -107,7 +107,7 @@ class CreateChange implements BaseChange {
 }
 
 class DeletionChange implements BaseChange {
-    id = v4();
+    id = 0;
     changeType = "delete" as const;
     modelType: string;
     modelId: string;
@@ -184,6 +184,8 @@ export function injestObjects(
 // Models register their changes in the pool so that their changes are sent to the sync system.
 // The pool is also responsible for initializing an object graph.
 export class ObjectPool {
+    protected shouldQueueChanges = false
+
     protected static instance: ObjectPool;
     protected constructor(api?: ApiIface) {
         this.apiClient = api;
@@ -198,8 +200,64 @@ export class ObjectPool {
         return ObjectPool.instance;
     }
 
-    public static reset(apiClient: ApiIface | undefined = undefined) {
-        ObjectPool.instance = new ObjectPool(apiClient);
+    public static async reset(apiClient: ApiIface | undefined = undefined) {
+        const pool = new ObjectPool(apiClient);
+
+        if (apiClient !== undefined) {
+            pool.shouldQueueChanges = true;
+            apiClient.setupSync(pool);
+
+            const localObjs = localDB.active ? await localDB.getAllObjects() : [];
+            if (localObjs.length === 0) {
+                // Full bootstrap
+                const bootstrapJson = await apiClient.bootstrap();
+                injestObjects(bootstrapJson.objects, pool);
+                if (localDB.active) {
+                    for (const jsonObj of bootstrapJson.objects) {
+                        await localDB.saveJson(jsonObj)
+                    }
+                }
+            } else {
+                const start = localObjs.reduce((acc: Date, m: JsonModel) => {
+                    const modelDate = new Date(m.lastModifiedDate ?? 0);
+                    acc = acc > modelDate ? acc : modelDate;
+                    return acc;
+                }, new Date(0));
+                // Delta bootstrap
+                // 1. Load the local objects in memory
+                injestObjects(localObjs, pool);
+
+                // 2. Request a delta bootstrap and inject those objects
+                const deltaBootstrap = await apiClient.deltaBootstrap(start)
+                injestObjects(deltaBootstrap.objects, pool);
+
+                // Presist delta bootstrap to indexdb
+                if (localDB.active) {
+                    for (const jsonObj of deltaBootstrap.objects) {
+                        await localDB.saveJson(jsonObj)
+                    }
+                }
+                
+                // TODO: Handle remote deletes.
+            }
+
+            // Load txns from disk.
+            const offlineChanges = await localDB.getAllTxn();
+            for (const change of offlineChanges) {
+                // Re-apply offline changes. This will send out the updates.
+                // TODO: If safe, we can optimize this with batching.
+                // This also applies them to the in-memory state
+                await pool.apply(change);
+            }
+            // This isn't needed anymore because i just apply them
+            // await pool.drainLocalTxns();
+
+            // Stop queueing remote updates.
+            pool.shouldQueueChanges = false;
+            // Drain queued remote updates.
+            pool.drainRemoteTxns();
+        }
+        ObjectPool.instance = pool
     }
 
     get(id: string): Model {
@@ -218,6 +276,27 @@ export class ObjectPool {
             throw new Error("Root must be defined");
         }
         return this.root;
+    }
+
+    private updates: ServerUpdate[] = [];
+    addServerChange(update: ServerUpdate) {
+      // First process this remote change.
+      this.updates.push(update);
+      this.drainRemoteTxns();
+
+      // Optimization to send local changes when we notice we're back online.
+      if (this.txns.length > 0) {
+        this.drainLocalTxns();
+        // I have changes to flush and an internet connection came back.
+      }
+    }
+
+    drainRemoteTxns() {
+        if (!this.shouldQueueChanges) {
+            for (const update of this.updates) {
+                this.applyServerUpdate(update);
+            }
+        }
     }
 
     applyServerUpdate({ type, jsonObject }: ServerUpdate) {
@@ -248,6 +327,7 @@ export class ObjectPool {
                 const localVersion = elem.version;
                 if (serverVersion <= localVersion) {
                     // We already have this change applied
+                    console.log("Rejecting old update")
                     return
                 }
                 // const serverDate = new Date(jsonObject.lastModifiedDate);
@@ -271,7 +351,7 @@ export class ObjectPool {
                 if (!elem) {
                     return;
                 }
-                elem.delete();
+                elem.delete(true);
                 break;
             }
         }
@@ -293,7 +373,6 @@ export class ObjectPool {
                 // Hack to get around the constructor helper.
                 delete this.pool[o.id];
                 o[key] = json[key];
-                this.pool[o.id] = o;
             } else if (key.endsWith("Id")) {
                 // Lookup this ID in the pool
                 const foreignO = this.pool[json[key]];
@@ -302,6 +381,10 @@ export class ObjectPool {
             } else {
                 o[key] = json[key];
             }
+        }
+        this.add(o);
+        if (localDB.active) {
+            localDB.saveJson(json)
         }
 
         // Save and don't flush this as a change.
@@ -317,6 +400,7 @@ export class ObjectPool {
         delete this.pool[id];
     }
 
+    @action
     add(model: Model): void {
         if (this.root === undefined) {
             this.root = model;
@@ -324,34 +408,68 @@ export class ObjectPool {
         this.pool[model.id] = model;
     }
 
-    async addChange(change: Change): Promise<void> {
-        this.txns.push(change);
+    // TODO: Figure out iface
+    async drainLocalTxns() {
         if (!this.apiClient) {
-            // Offline mode.
+            // TODO: Premeptiely check if we're offline.
+            // Offline mode for testing.
             return;
         }
-        try {
-            // Make an async request to change?.
-            await this.apiClient.change(change);
+        for (const change of this.txns) {
+            try {
+                // Make an async request to change?.
+                await this.apiClient.change(change);
 
-            // I don't think that we need the server version with Lamport timestamps.
+                // I don't think that we need the server version with Lamport timestamps.
 
-            // TODO: Get a timestamp from the server acc'ing. This should be the timestamp
-            // set on the local model. This way it doesn't need to wait for the updates coming
-            // over the websocket.
+                // TODO: Get a timestamp from the server acc'ing. This should be the timestamp
+                // set on the local model. This way it doesn't need to wait for the updates coming
+                // over the websocket.
 
-            // If we get a success, that means that the change was accepted. We can
-            // remove this from the local persistance because if we refresh we'll
-            // get the latest from the server.
-            this.txns = this.txns.filter((x) => x.id !== change.id);
-            // TODO: Persist.
-        } catch (e) {
-            this.rollback(change);
-            // TODO: Make a helper and persist.
-            this.txns = this.txns.filter((x) => x.id !== change.id);
-            // We did not successfully make a request so keep it in the local queue.
-            console.error(e);
+                // If we get a success, that means that the change was accepted. We can
+                // remove this from the local persistance because if we refresh we'll
+                // get the latest from the server.
+                this.txns = this.txns.filter((x) => x.id !== change.id);
+                if (localDB.active) {
+                    await localDB.removeTxn(change.id);
+                }
+                // Remove this txn from the persisted txns.
+            } catch (e) {
+                if ((e as Error).message === "Failed to fetch") {
+                    // TODO: Type this better
+                    // If it failed due not being able to connect (ie offline),
+                    // then just leave it on the queue.
+                    break;
+                } else if ((e as Error).message.includes("rollback")) {
+                    this.rollback(change);
+                    // TODO: Make a helper and persist.
+                    this.txns = this.txns.filter((x) => x.id !== change.id);
+                    if (localDB.active) {
+                        await localDB.removeTxn(change.id);
+                    }
+                    // We did not successfully make a request so keep it in the local queue.
+                    console.error(e);
+                } else {
+                    this.txns = this.txns.filter((x) => x.id !== change.id);
+                    if (localDB.active) {
+                        await localDB.removeTxn(change.id);
+                    }
+                    // We did not successfully make a request so keep it in the local queue.
+                    console.error(e);
+                }
+            }
         }
+    }
+
+    async addChange(change: Change): Promise<void> {
+        change.id = this.txns.length
+        if (localDB.active) {
+            await localDB.saveTxn(change);
+        }
+        this.txns.push(change);
+        // TODO: Persist this to the index DB txn.
+        
+        await this.drainLocalTxns();
     }
 
     // rollback undoes a change on the txn queue stack. This will happen
@@ -385,6 +503,41 @@ export class ObjectPool {
         }
         // TODO: For this to work we need to ensure that all txns have unique IDs.
         this.txns = this.txns.filter((x) => x.id !== change.id);
+    }
+
+    // Apply is used to replay local txns
+    async apply(change: Change) {
+        switch (change.changeType) {
+            case "update": {
+                const target = this.pool[change.modelId];
+                if (!target) {
+                    // If we deleted the object, an undo to an edit doesn't make sense.
+                    break;
+                }
+                for (const property in change.changeSnapshot.changes) {
+                    const changeSnapshot = change.changeSnapshot.changes[property];
+                    // TODO: Probably a better way to do this.
+                    (target as any)[property] = changeSnapshot.updated;
+                }
+                break;
+            }
+            case "create": {
+                const modelCopy = JSON.parse(JSON.stringify(change.model));
+                modelCopy["__class"] = change.modelType;
+                this.addFromJson(modelCopy);
+                break;
+            }
+            case "delete": {
+                const o = this.pool[change.model.id];
+                if (o === undefined) {
+                    break;
+                }
+                o.delete(true); // We don't need to send the delete to the server.
+                break;
+            }
+        }
+        this.txns.push(change)
+        await this.drainLocalTxns();
     }
 }
 

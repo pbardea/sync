@@ -3,7 +3,7 @@ import "./App.css";
 import { observer } from "mobx-react";
 import { Team } from "./models/team";
 import { User } from "./models/user";
-import { computed, isObservable } from "mobx";
+import { computed } from "mobx";
 
 const debounce = (callback: Function, wait: number) => {
     let timeoutId: number | undefined = undefined;
@@ -20,7 +20,7 @@ const debounce = (callback: Function, wait: number) => {
 
 const App = observer((props: { team: Team }) => {
     const [count, setCount] = useState(0);
-    const [selectedField, setSelectedField] = useState("email");
+    const [selectedField, setSelectedField] = useState("name");
     const handleDropdownChange = (e: ChangeEvent) => {
         setSelectedField((e.target as HTMLSelectElement).value);
     };
@@ -94,7 +94,7 @@ const App = observer((props: { team: Team }) => {
                     </option>
                 ))}
             </select>
-            <select onChange={handleDropdownChange} defaultValue="email">
+            <select onChange={handleDropdownChange} defaultValue="name">
                 <option value="email">Email</option>
                 <option value="name">Name</option>
             </select>

@@ -3,6 +3,8 @@
 import { Change, ObjectPool } from "./pool";
 import { JsonModel } from "../api";
 import { action, makeObservable, observable } from "mobx";
+import { v4 } from "uuid";
+import { localDB } from "./indexdb";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
 
@@ -50,11 +52,13 @@ export function ManyToOne(fkName: string) {
                     if (newId) {
                         const newObj = this._pool.get(newId);
                         if (newObj === undefined) {
-                            // console.log('Could not find object ' + newId)
+                            // console.log('Could not find object ' + newId)base
                             // console.log(this._pool)
                         }
-                        newObj[fkName].push(this);
-                        newObj.setProperty(fkName, newObj[fkName]);
+                        if (!newObj[fkName].find((x: Model) => x.id === this.id)) {
+                            newObj.setProperty(fkName, newObj[fkName]);
+                            newObj[fkName].push(this);
+                        }
                     }
 
                     this.setProperty(idKey, newVal?.id);
@@ -113,9 +117,12 @@ export function ClientModel(modelName: string) {
         target.prototype.delete = function(serverChange = false) {
             // Remove it from the pool first
             this._pool.delete(this.id);
+            if (localDB.active) {
+                localDB.removeObject(modelName, this.id);
+            }
 
             const change = {
-                id: "1",
+                id: v4(),
                 changeType: "delete",
                 modelType: modelName,
                 modelId: this.id,
@@ -166,7 +173,7 @@ export function ClientModel(modelName: string) {
             if (original === undefined) {
                 const copyThis = this.getJson();
                 change = {
-                    id: "1",
+                    id: 0,
                     changeType: "create",
                     modelType: modelName,
                     modelId: copyThis.id,
@@ -190,7 +197,7 @@ export function ClientModel(modelName: string) {
                 }
 
                 change = {
-                    id: "1",
+                    id: 0,
                     changeType: "update",
                     modelType: modelName,
                     modelId: this.id,

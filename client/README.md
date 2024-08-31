@@ -36,9 +36,9 @@ Startup:
 
 - Do I have data locally?
 
+  - NO: Request a full bootstrap and write the response to indexdb.
   - YES: Request a delta bootstrap that sends back all of the objects that have been modified since
     a particular version. Update indexdb with the new models.
-  - NO: Request a full bootstrap and write the response to indexdb.
 
 - Change is made: make it in memory
 

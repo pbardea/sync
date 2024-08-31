@@ -135,6 +135,7 @@ func writeObject(db *sql.DB, object string) ([]map[string]interface{}, error) {
 }
 
 func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
+    fmt.Printf("%+v\n", start)
     // TODO: This is a bad practice, but an effecitve hack.
     queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
     args := make([]any, 0)
@@ -236,6 +237,8 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	// team := r.Context().Value("team").(string)
     
     startTime := r.URL.Query().Get("start_time")
+    fmt.Printf("Query param start time %+v\n", startTime) 
+    // TODO: Precision mismatch between client, server and db
     start, err := time.Parse(time.RFC3339, startTime)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
@@ -266,6 +269,16 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteObject(db *sql.DB, object string, id string) error {
+    checkIfDeleted := fmt.Sprintf(`SELECT COUNT(id) FROM "%s" WHERE id = $1`, strings.ToLower(object))
+    row := db.QueryRow(checkIfDeleted, id)
+    var count int
+    if err := row.Scan(&count); err != nil {
+        return err;
+    }
+    if count == 0 {
+        return fmt.Errorf("Object with ID %s does not exist", id);
+    }
+
     queryText := fmt.Sprintf(`DELETE FROM "%s" WHERE id = $1`, strings.ToLower(object))
 
     _, err := db.Exec(queryText, id)
@@ -309,8 +322,8 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
     if err != nil {
         return err
     }
-    finalVersion := strconv.Itoa(incomingVersion)
-    if (serverVersion < incomingVersion) {
+    finalVersion := strconv.Itoa(incomingVersion + 1)
+    if (serverVersion > incomingVersion) {
         // We've had writes since this client has seen this change.
         // We're doing last write wins, so we're going to call this the latest version.
         finalVersion = strconv.Itoa(serverVersion + 1)
@@ -389,7 +402,7 @@ func getObjectAsJson(db *sql.DB, objectName string, id string) (string, error) {
 }
 
 type ChangeRequest struct {
-    id *string;
+    id *int;
     changeType *string;
     modelId *string;
     modelType *string;
@@ -407,7 +420,7 @@ type ChangeSnapshot struct {
 }
 
 type RequestBody struct {
-    ID            string                    `json:"id"`
+    ID            int                       `json:"id"`
     ChangeType    string                    `json:"changeType"`
     ModelType     string                    `json:"modelType"`
     ModelID       string                    `json:"modelId"`
