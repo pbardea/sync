@@ -405,7 +405,7 @@ describe("API Testing Pool", () => {
         const u = new User(pool);
 
         const change: Change = {
-            id: "1",
+            id: 1,
             changeType: "update",
             modelType: "User",
             modelId: u.id,

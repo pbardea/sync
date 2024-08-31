@@ -144,6 +144,10 @@ export function ClientModel(modelName: string) {
             this._save(true);
         };
 
+        // FIXME: I need to reload twice to get delta-sync updates visible
+        // FIXME: If I refresh while I'm offline, I don't see my pending txns applied
+        // FIXME: Seeing some requests happen twice.
+
         target.prototype.getJson = function() {
             // Remove all references.
             const o = JSON.parse(
@@ -162,7 +166,7 @@ export function ClientModel(modelName: string) {
             for (const prop of props) {
                 o[prop] = this[prop]
             }
-            o["__class"] = target.name;
+            o["__class"] = modelName;
             return o;
         };
 

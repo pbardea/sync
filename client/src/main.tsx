@@ -13,9 +13,13 @@ import { ClientModel, Property } from "./models/base.ts";
 User.init();
 Team.init();
 
-await mainApi.login("pbardea", "password");
-await ObjectPool.reset(mainApi);
+try {
+    await mainApi.login("pbardea", "password");
+} catch (e) {
+    console.error(e);
+}
 
+await ObjectPool.reset(mainApi);
 const team = ObjectPool.getInstance().getRoot as Team;
 
 export class TimerCollection {

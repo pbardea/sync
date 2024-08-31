@@ -60,13 +60,23 @@ class ApiClient implements ApiIface {
     }
 
     async bootstrap(): Promise<BootstrapData> {
-        const objects = await this.request<JsonModel[]>("/bootstrap");
-        return { objects: objects };
+        try {
+            const objects = await this.request<JsonModel[]>("/bootstrap");
+            return { objects: objects };
+        } catch (e) {
+            console.error(e);
+            return { objects: [] };
+        }
     }
 
     async deltaBootstrap(start: Date): Promise<BootstrapData> {
-        const objects = await this.request<JsonModel[]>(`/delta-bootstrap?start_time=${encodeURIComponent(start.toISOString())}`);
-        return { objects: objects };
+        try {
+            const objects = await this.request<JsonModel[]>(`/delta-bootstrap?start_time=${encodeURIComponent(start.toISOString())}`);
+            return { objects: objects };
+        } catch (e) {
+            console.error(e);
+            return { objects: [] };
+        }
     }
 
     async change(data: Change): Promise<Model> {
@@ -76,18 +86,22 @@ class ApiClient implements ApiIface {
         });
     }
 
-    setupSync(client: ObjectPool): WebSocket {
-        if (!this.token) {
-            throw new Error("Not authenticated");
+    setupSync(client: ObjectPool) {
+        // TODO: Support local caching of the token
+        // if (!this.token) {
+        //     throw new Error("Not authenticated");
+        // }
+        try {
+            const ws = new WebSocket(`ws://localhost:8080/sync`);
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ token: this.token }));
+            };
+            ws.onmessage = (event) => {
+                client?.addServerChange(JSON.parse(event.data));
+            };
+        } catch (e) {
+            console.error(e);
         }
-        const ws = new WebSocket(`ws://localhost:8080/sync`);
-        ws.onopen = () => {
-            ws.send(JSON.stringify({ token: this.token }));
-        };
-        ws.onmessage = (event) => {
-            client?.addServerChange(JSON.parse(event.data));
-        };
-        return ws;
     }
 }
 

@@ -64,7 +64,7 @@ func main() {
 
 	// CORS middleware
 	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"http://localhost:5173", "http://localhost:5174"})
+	originsOk := handlers.AllowedOrigins([]string{"https://localhost:5172", "http://localhost:5173", "http://localhost:5174"})
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})
 
 	http.ListenAndServe(":8080", handlers.CORS(headersOk, originsOk, methodsOk)(r))

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "serve": "PORT=5172 serve dist",
     "build": "tsc -b && vite build",
     "test": "vitest",
     "lint": "eslint .",
@@ -12,6 +13,7 @@
   },
   "dependencies": {
     "@babel/plugin-proposal-decorators": "^7.24.7",
+    "https-localhost": "^4.7.1",
     "idb": "^8.0.0",
     "mobx": "^6.13.1",
     "mobx-react": "^9.1.1",
@@ -33,6 +35,8 @@
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1",
+    "vite-plugin-pwa": "^0.20.2",
+    "vite-plugin-top-level-await": "^1.4.4",
     "vitest": "^2.0.5"
   }
 }

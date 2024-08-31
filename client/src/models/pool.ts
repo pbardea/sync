@@ -557,7 +557,7 @@ export class ApiTestingPool extends ObjectPool {
         return ApiTestingPool.testInstance;
     }
     // TODO: Figure out if this is needed.
-    apply(change: Change) {
+    async apply(change: Change) {
         // This is a change that we receive from a websocket.
         switch (change.changeType) {
             case "update": {
