@@ -122,7 +122,7 @@ export function ClientModel(modelName: string) {
             }
 
             const change = {
-                id: v4(),
+                id: 0,
                 changeType: "delete",
                 modelType: modelName,
                 modelId: this.id,
@@ -143,10 +143,6 @@ export function ClientModel(modelName: string) {
             }
             this._save(true);
         };
-
-        // FIXME: I need to reload twice to get delta-sync updates visible
-        // FIXME: If I refresh while I'm offline, I don't see my pending txns applied
-        // FIXME: Seeing some requests happen twice.
 
         target.prototype.getJson = function() {
             // Remove all references.
