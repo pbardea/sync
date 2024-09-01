@@ -11,28 +11,28 @@ import { Change, TransactionQueue } from "./transaction_queue";
 // Models register their changes in the pool so that their changes are sent to the sync system.
 // The pool is also responsible for initializing an object graph.
 export class ObjectPool {
-  syncResolver: SyncResolver
-  txnQueue: TransactionQueue
+  syncResolver: SyncResolver;
+  txnQueue: TransactionQueue;
 
   protected static instance: ObjectPool;
   protected constructor(apiClient: ApiIface) {
-      const syncResolver = new SyncResolver(apiClient, this)
-      const txnQueue = new TransactionQueue(apiClient, this)
-      this.syncResolver = syncResolver
-      this.txnQueue = txnQueue
+    const syncResolver = new SyncResolver(apiClient, this);
+    const txnQueue = new TransactionQueue(apiClient, this);
+    this.syncResolver = syncResolver;
+    this.txnQueue = txnQueue;
   }
   static models: Record<string, any> = {};
 
   public static async init(apiClient: ApiIface) {
     const pool = new ObjectPool(apiClient);
     ObjectPool.instance = pool;
-    await pool.syncResolver.bootstrap()
-    await pool.txnQueue.bootstrap()
+    await pool.syncResolver.bootstrap();
+    await pool.txnQueue.bootstrap();
   }
 
   public static getInstance() {
     if (!ObjectPool.instance) {
-        throw new Error("ObjectPool not initialized")
+      throw new Error("ObjectPool not initialized");
     }
     return ObjectPool.instance;
   }
@@ -178,4 +178,3 @@ export class ObjectPool {
     }
   }
 }
-

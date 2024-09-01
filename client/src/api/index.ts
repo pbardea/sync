@@ -1,6 +1,6 @@
 import { Model } from "../models/base";
-import { Change } from "../models/pool";
 import { SyncResolver } from "../models/sync_resolver";
+import { Change } from "../models/transaction_queue";
 
 const BASE_URL = "http://localhost:8080";
 

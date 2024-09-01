@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Change, ObjectPool } from "./pool";
+import { ObjectPool } from "./pool";
 import { JsonModel } from "../api";
 import { action, makeObservable, observable } from "mobx";
 import { v4 } from "uuid";
+import { Change } from "./transaction_queue";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
 
@@ -113,6 +114,7 @@ export function ClientModel(modelName: string) {
 
       const change = {
         id: v4(),
+        oid: 0,
         changeType: "delete",
         modelType: modelName,
         modelId: this.id,
@@ -164,6 +166,7 @@ export function ClientModel(modelName: string) {
         const copyThis = this.getJson();
         change = {
           id: v4(),
+          oid: 0,
           changeType: "create",
           modelType: modelName,
           modelId: copyThis.id,
@@ -188,6 +191,7 @@ export function ClientModel(modelName: string) {
 
         change = {
           id: v4(),
+          oid: 0,
           changeType: "update",
           modelType: modelName,
           modelId: this.id,
