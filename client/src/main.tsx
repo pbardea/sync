@@ -10,39 +10,39 @@ import Simple from "./simple.tsx";
 import { action, observable } from "mobx";
 import { ClientModel, Property } from "./models/base.ts";
 
+await ObjectPool.init(mainApi);
+
 User.init();
 Team.init();
 
 try {
-    await mainApi.login("pbardea", "password");
+  await mainApi.login("pbardea", "password");
 } catch (e) {
-    console.error(e);
+  console.error(e);
 }
 
-await ObjectPool.reset(mainApi);
 const team = ObjectPool.getInstance().getRoot as Team;
 
 export class TimerCollection {
-    @observable
-    accessor timers: Timer[] = []
+  @observable
+  accessor timers: Timer[] = [];
 }
 
 @ClientModel("Timer")
 export class Timer {
+  @Property()
+  @observable
+  accessor seconds = 0;
 
-    @Property()
-    @observable
-    accessor seconds = 0
-
-    @action
-    updateSeconds() {
-        this.seconds += 1
-    }
+  @action
+  updateSeconds() {
+    this.seconds += 1;
+  }
 }
 
-const timer = new Timer()
-const timerCol = new TimerCollection()
-timerCol.timers = [timer]
+const timer = new Timer();
+const timerCol = new TimerCollection();
+timerCol.timers = [timer];
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

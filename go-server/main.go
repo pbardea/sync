@@ -137,26 +137,25 @@ func writeObject(db *sql.DB, object string) ([]map[string]interface{}, error) {
 func getTombstones(db *sql.DB, start *time.Time) ([]tombstone, error) {
 	queryText := fmt.Sprintf(`SELECT id, "deletedTime", "model" FROM "tombstone" WHERE "deletedTime" > $1`)
 	rows, err := db.Query(queryText, start)
-    if err != nil {
-        return nil, err;
-    }
+	if err != nil {
+		return nil, err
+	}
 
-    dataArr := make([]tombstone, 0)
-    for rows.Next() {
-	    var id string
-        var deletedTime time.Time
-	    var modelName string
-	    err := rows.Scan(&id, &deletedTime, &modelName)
-        if err != nil {
-            return nil, err
-        }
-        dataArr = append(dataArr, tombstone{id, deletedTime, modelName})
-    }
-    return dataArr, nil
+	dataArr := make([]tombstone, 0)
+	for rows.Next() {
+		var id string
+		var deletedTime time.Time
+		var modelName string
+		err := rows.Scan(&id, &deletedTime, &modelName)
+		if err != nil {
+			return nil, err
+		}
+		dataArr = append(dataArr, tombstone{id, deletedTime, modelName})
+	}
+	return dataArr, nil
 }
 
 func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
-	fmt.Printf("%+v\n", start)
 	// TODO: This is a bad practice, but an effecitve hack.
 	queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
 	args := make([]any, 0)
@@ -213,9 +212,6 @@ func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string
 				}
 			}
 		}
-		// if err := json.NewEncoder(w).Encode(data); err != nil {
-		//     return nil, err;
-		// }
 		dataArr = append(dataArr, data)
 	}
 
@@ -223,9 +219,9 @@ func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string
 }
 
 type tombstone struct {
-	Id   string
-	Time time.Time
-    ModelName string
+	Id        string
+	Time      time.Time
+	ModelName string
 }
 
 type bootstrapResponse struct {
@@ -270,20 +266,25 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	// username := r.Context().Value("username").(string)
 	// team := r.Context().Value("team").(string)
 
-	startTime := r.URL.Query().Get("start_time")
-	fmt.Printf("Query param start time %+v\n", startTime)
-	// TODO: Precision mismatch between client, server and db
-	start, err := time.Parse(time.RFC3339, startTime)
+	startTime, err := strconv.ParseInt(r.URL.Query().Get("start_time"), 10, 64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	start := time.UnixMilli(startTime)
 
 	db := getConn()
 	defer db.Close()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+
+	tombstones, err := getTombstones(db, &start)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// TODO: Think about schema changes. Probably is worth an RFD.
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
@@ -296,12 +297,6 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 			finalArr = append(finalArr, dataArr...)
 		}
 	}
-
-    tombstones, err := getTombstones(db, &start)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
 
 	resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -320,10 +315,10 @@ func deleteObject(db *sql.DB, object string, id string) error {
 		return fmt.Errorf("Object with ID %s does not exist", id)
 	}
 
-	// TODO: The client is assuming that they've seen an entire state of the world based on their
+	// TODO(#10): The client is assuming that they've seen an entire state of the world based on their
 	// latest timestamp. How do we not know that they might have dropped a ws update in the meantime.
 
-	// TODO: Make transactional
+	// TODO(#15): Make transactional
 	_, err := db.Exec(`INSERT INTO tombstone (id, model) VALUES ($1, $2)`, id, object)
 	if err != nil {
 		return err
@@ -367,10 +362,7 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
 	if err != nil {
 		return err
 	}
-	incomingVersion, err := strconv.Atoi(changes["version"].Updated)
-	if err != nil {
-		return err
-	}
+	incomingVersion := int(changes["version"].Updated.(float64))
 	finalVersion := strconv.Itoa(incomingVersion + 1)
 	if serverVersion > incomingVersion {
 		// We've had writes since this client has seen this change.
@@ -459,8 +451,8 @@ type ChangeRequest struct {
 }
 
 type Change struct {
-	Original string `json:"original"`
-	Updated  string `json:"updated"`
+	Original interface{} `json:"original"`
+	Updated  interface{} `json:"updated"`
 }
 
 type ChangeSnapshot struct {

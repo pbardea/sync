@@ -1,6 +1,5 @@
 import { v4 } from "uuid";
 import { ClientModel, ManyToOne, Model, Property } from "./base";
-import { ObjectPool } from "./pool";
 import { Team } from "./team";
 import { action, makeObservable, observable } from "mobx";
 
@@ -20,12 +19,12 @@ export class User extends Model {
 
   @action
   setEmail(newEmail: string) {
-      console.log("SETTING EMAIL")
-      this.email = newEmail
+    console.log("SETTING EMAIL");
+    this.email = newEmail;
   }
 
-  constructor(pool = ObjectPool.getInstance(), id = v4()) {
-    super(pool, id);
+  constructor(id = v4()) {
+    super(id);
     this.name = "";
     this.email = "";
     makeObservable(this);

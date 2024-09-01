@@ -1,5 +1,6 @@
 import { Model } from "../models/base";
-import { Change, ObjectPool } from "../models/pool";
+import { Change } from "../models/pool";
+import { SyncResolver } from "../models/sync_resolver";
 
 const BASE_URL = "http://localhost:8080";
 
@@ -25,11 +26,11 @@ interface BootstrapApiResponse {
 }
 
 export interface ApiIface {
-  login(username: string, password: string): Promise<void>;
+  login(_username: string, _password: string): Promise<void>;
   bootstrap(): Promise<BootstrapData>;
-  deltaBootstrap(start: Date): Promise<BootstrapData>;
-  change(data: Change): Promise<Model>;
-  setupSync(client: ObjectPool): void;
+  deltaBootstrap(_start: Date): Promise<BootstrapData>;
+  change(_data: Change): Promise<Model>;
+  setupSync(_client: SyncResolver): void;
 }
 
 class ApiClient implements ApiIface {
@@ -53,7 +54,7 @@ class ApiClient implements ApiIface {
     return response.json();
   }
 
-  // TODO: Figure out when to do this.
+  // TODO(#11): Figure out when to do this.
   async login(username: string, password: string): Promise<void> {
     const response = await this.request<LoginResponse>("/login", {
       method: "POST",
@@ -83,14 +84,14 @@ class ApiClient implements ApiIface {
     start.setSeconds(start.getSeconds() + 1);
     try {
       const resp = await this.request<BootstrapApiResponse>(
-        `/delta-bootstrap?start_time=${encodeURIComponent(start.toISOString())}`,
+        `/delta-bootstrap?start_time=${encodeURIComponent(start.getTime())}`,
       );
       return {
         objects: resp.Objects,
         tombstones: resp.Tombstones.map((t) => ({
           id: t.Id,
           time: t.Time,
-          __class: t.ModelName,
+          modelName: t.ModelName,
         })),
       };
     } catch (e) {
@@ -106,8 +107,8 @@ class ApiClient implements ApiIface {
     });
   }
 
-  setupSync(client: ObjectPool) {
-    // TODO: Support local caching of the token
+  setupSync(client: SyncResolver) {
+    // TODO(#16): Support local caching of the token
     // if (!this.token) {
     //     throw new Error("Not authenticated");
     // }
@@ -117,7 +118,7 @@ class ApiClient implements ApiIface {
         ws.send(JSON.stringify({ token: this.token }));
       };
       ws.onmessage = (event) => {
-        client?.addServerChange(JSON.parse(event.data));
+        client.addServerChange(JSON.parse(event.data));
       };
     } catch (e) {
       console.error(e);
