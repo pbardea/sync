@@ -3,7 +3,6 @@
 import { Change, ObjectPool } from "./pool";
 import { JsonModel } from "../api";
 import { action, makeObservable, observable } from "mobx";
-import { v4 } from "uuid";
 import { localDB } from "./indexdb";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
