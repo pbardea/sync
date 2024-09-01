@@ -131,76 +131,107 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeObject(db *sql.DB, object string) ([]map[string]interface{}, error) {
-    return writeObjectDelta(db, object, nil)
+	return writeObjectDelta(db, object, nil)
 }
 
-func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
-    fmt.Printf("%+v\n", start)
-    // TODO: This is a bad practice, but an effecitve hack.
-    queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
-    args := make([]any, 0)
-    if start != nil {
-        queryText += fmt.Sprintf(` WHERE "lastModifiedDate" > $1`)
-        args = append(args, start)
-    }
-
-    rows, err := db.Query(queryText, args...)
+func getTombstones(db *sql.DB, start *time.Time) ([]tombstone, error) {
+	queryText := fmt.Sprintf(`SELECT id, "deletedTime", "model" FROM "tombstone" WHERE "deletedTime" > $1`)
+	rows, err := db.Query(queryText, start)
     if err != nil {
-        return nil, err
-    }
-    columns, err := rows.Columns()
-    if err != nil {
-        return nil, err
+        return nil, err;
     }
 
-    count := len(columns)
-    values := make([]interface{}, count)
-    scanArgs := make([]interface{}, count)
-    for i := range values {
-        scanArgs[i] = &values[i]
-    }
-
-    dataArr := make([]map[string]interface{}, 0)
-
+    dataArr := make([]tombstone, 0)
     for rows.Next() {
-        err := rows.Scan(scanArgs...)
+	    var id string
+        var deletedTime time.Time
+	    var modelName string
+	    err := rows.Scan(&id, &deletedTime, &modelName)
         if err != nil {
             return nil, err
         }
-        data := make(map[string]interface{})
-        data["__class"] = strings.ToUpper(object[:1]) + object[1:]
-        for i, v := range values {
-            fmt.Printf("%T\n", v)
-            if (v == nil) {
-                continue
-            }
-            // TODO: Clean up
-            if "int64" == fmt.Sprintf("%T", v) {
-                data[columns[i]] = v
-            } else if "time.Time" == fmt.Sprintf("%T", v) {
-                data[columns[i]] = v
-            } else {
-                x := v.(string)
-                if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
-                    data[columns[i]] = nx
-                } else if b, ok := strconv.ParseBool(string(x)); ok == nil {
-                    data[columns[i]] = b
-                } else if "string" == fmt.Sprintf("%T", string(x)) {
-                    data[columns[i]] = string(x)
-                } else {
-                    fmt.Printf("Failed on if for type %T of %v\n", x, x)
-                }
-            }
-        }
-        // if err := json.NewEncoder(w).Encode(data); err != nil {
-        //     return nil, err;
-        // }
-        dataArr = append(dataArr, data)
+        dataArr = append(dataArr, tombstone{id, deletedTime, modelName})
     }
-
     return dataArr, nil
 }
 
+func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
+	fmt.Printf("%+v\n", start)
+	// TODO: This is a bad practice, but an effecitve hack.
+	queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
+	args := make([]any, 0)
+	if start != nil {
+		queryText += fmt.Sprintf(` WHERE "lastModifiedDate" > $1`)
+		args = append(args, start)
+	}
+
+	rows, err := db.Query(queryText, args...)
+	if err != nil {
+		return nil, err
+	}
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	count := len(columns)
+	values := make([]interface{}, count)
+	scanArgs := make([]interface{}, count)
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	dataArr := make([]map[string]interface{}, 0)
+
+	for rows.Next() {
+		err := rows.Scan(scanArgs...)
+		if err != nil {
+			return nil, err
+		}
+		data := make(map[string]interface{})
+		data["__class"] = strings.ToUpper(object[:1]) + object[1:]
+		for i, v := range values {
+			fmt.Printf("%T\n", v)
+			if v == nil {
+				continue
+			}
+			// TODO: Clean up
+			if "int64" == fmt.Sprintf("%T", v) {
+				data[columns[i]] = v
+			} else if "time.Time" == fmt.Sprintf("%T", v) {
+				data[columns[i]] = v
+			} else {
+				x := v.(string)
+				if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
+					data[columns[i]] = nx
+				} else if b, ok := strconv.ParseBool(string(x)); ok == nil {
+					data[columns[i]] = b
+				} else if "string" == fmt.Sprintf("%T", string(x)) {
+					data[columns[i]] = string(x)
+				} else {
+					fmt.Printf("Failed on if for type %T of %v\n", x, x)
+				}
+			}
+		}
+		// if err := json.NewEncoder(w).Encode(data); err != nil {
+		//     return nil, err;
+		// }
+		dataArr = append(dataArr, data)
+	}
+
+	return dataArr, nil
+}
+
+type tombstone struct {
+	Id   string
+	Time time.Time
+    ModelName string
+}
+
+type bootstrapResponse struct {
+	Objects    []map[string]interface{}
+	Tombstones []tombstone
+}
 
 // Sample handler for bootstrap
 func handleBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -215,35 +246,38 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	// TODO: Think about schema changes. Probably is worth an RFD.
 	// TODO: Filter this down for permissions. Also worth an RFD.
-    finalArr := make([]map[string]interface{}, 0)
+	finalArr := make([]map[string]interface{}, 0)
 
-    objectsToBootstrap := []string{"Team", "User"}
-    for _, object := range objectsToBootstrap {
-        if dataArr, err := writeObject(db, object); err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-        } else {
-            finalArr = append(finalArr, dataArr...)
-        }
-    }
+	objectsToBootstrap := []string{"Team", "User"}
+	for _, object := range objectsToBootstrap {
+		if dataArr, err := writeObject(db, object); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			finalArr = append(finalArr, dataArr...)
+		}
+	}
 
-    if err := json.NewEncoder(w).Encode(finalArr); err != nil {
+	resp := bootstrapResponse{Objects: finalArr, Tombstones: []tombstone{}}
+	fmt.Printf("%+v\n", resp)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-    }
+	}
 }
 
 func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	// Example of accessing claims from context
 	// username := r.Context().Value("username").(string)
 	// team := r.Context().Value("team").(string)
-    
-    startTime := r.URL.Query().Get("start_time")
-    fmt.Printf("Query param start time %+v\n", startTime) 
-    // TODO: Precision mismatch between client, server and db
-    start, err := time.Parse(time.RFC3339, startTime)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
+
+	startTime := r.URL.Query().Get("start_time")
+	fmt.Printf("Query param start time %+v\n", startTime)
+	// TODO: Precision mismatch between client, server and db
+	start, err := time.Parse(time.RFC3339, startTime)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	db := getConn()
 	defer db.Close()
@@ -252,300 +286,314 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	// TODO: Think about schema changes. Probably is worth an RFD.
 	// TODO: Filter this down for permissions. Also worth an RFD.
-    finalArr := make([]map[string]interface{}, 0)
+	finalArr := make([]map[string]interface{}, 0)
 
-    objectsToBootstrap := []string{"Team", "User"}
-    for _, object := range objectsToBootstrap {
-        if dataArr, err := writeObjectDelta(db, object, &start); err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-        } else {
-            finalArr = append(finalArr, dataArr...)
-        }
+	objectsToBootstrap := []string{"Team", "User"}
+	for _, object := range objectsToBootstrap {
+		if dataArr, err := writeObjectDelta(db, object, &start); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		} else {
+			finalArr = append(finalArr, dataArr...)
+		}
+	}
+
+    tombstones, err := getTombstones(db, &start)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
     }
 
-    if err := json.NewEncoder(w).Encode(finalArr); err != nil {
+	resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-    }
+	}
 }
 
 func deleteObject(db *sql.DB, object string, id string) error {
-    checkIfDeleted := fmt.Sprintf(`SELECT COUNT(id) FROM "%s" WHERE id = $1`, strings.ToLower(object))
-    row := db.QueryRow(checkIfDeleted, id)
-    var count int
-    if err := row.Scan(&count); err != nil {
-        return err;
-    }
-    if count == 0 {
-        return fmt.Errorf("Object with ID %s does not exist", id);
-    }
+	checkIfDeleted := fmt.Sprintf(`SELECT COUNT(id) FROM "%s" WHERE id = $1`, strings.ToLower(object))
+	row := db.QueryRow(checkIfDeleted, id)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("Object with ID %s does not exist", id)
+	}
 
-    queryText := fmt.Sprintf(`DELETE FROM "%s" WHERE id = $1`, strings.ToLower(object))
+	// TODO: The client is assuming that they've seen an entire state of the world based on their
+	// latest timestamp. How do we not know that they might have dropped a ws update in the meantime.
 
-    _, err := db.Exec(queryText, id)
-    return err
+	// TODO: Make transactional
+	_, err := db.Exec(`INSERT INTO tombstone (id, model) VALUES ($1, $2)`, id, object)
+	if err != nil {
+		return err
+	}
+
+	deleteQuery := fmt.Sprintf(`DELETE FROM "%s" WHERE id = $1`, strings.ToLower(object))
+	_, err = db.Exec(deleteQuery, id)
+	return err
 }
 
 func getVersion(db *sql.DB, object string, id string) (int, error) {
-    queryText := fmt.Sprintf(`SELECT version FROM "%s" WHERE id = $1`, strings.ToLower(object))
-    row := db.QueryRow(queryText, id)
-    var version int
-    err := row.Scan(&version)
-    return version, err
+	queryText := fmt.Sprintf(`SELECT version FROM "%s" WHERE id = $1`, strings.ToLower(object))
+	row := db.QueryRow(queryText, id)
+	var version int
+	err := row.Scan(&version)
+	return version, err
 }
 
 func insertObject(db *sql.DB, object string, model map[string]interface{}) error {
-    props := make([]string, 0, len(model))
-    placeholders := make([]string, 0, len(model))
-    values := make([]interface{}, 0, len(model))
+	props := make([]string, 0, len(model))
+	placeholders := make([]string, 0, len(model))
+	values := make([]interface{}, 0, len(model))
 
-    for prop, value := range model {
-        if (prop == "__class") {
-            continue
-        }
-        props = append(props, fmt.Sprintf(`"%s"`, prop))
-        placeholders = append(placeholders, fmt.Sprintf("$%d", len(placeholders)+1))
-        values = append(values, value)
-    }
+	for prop, value := range model {
+		if prop == "__class" {
+			continue
+		}
+		props = append(props, fmt.Sprintf(`"%s"`, prop))
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(placeholders)+1))
+		values = append(values, value)
+	}
 
-    queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
+	queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
 
-    _, err := db.Exec(queryText, values...)
-    return err
+	_, err := db.Exec(queryText, values...)
+	return err
 }
 
 func updateObject(db *sql.DB, object string, id string, changes map[string]Change) error {
-    serverVersion, err := getVersion(db, object, id)
-    if err != nil {
-        return err
-    }
-    incomingVersion, err := strconv.Atoi(changes["version"].Updated)
-    if err != nil {
-        return err
-    }
-    finalVersion := strconv.Itoa(incomingVersion + 1)
-    if (serverVersion > incomingVersion) {
-        // We've had writes since this client has seen this change.
-        // We're doing last write wins, so we're going to call this the latest version.
-        finalVersion = strconv.Itoa(serverVersion + 1)
-    }
+	serverVersion, err := getVersion(db, object, id)
+	if err != nil {
+		return err
+	}
+	incomingVersion, err := strconv.Atoi(changes["version"].Updated)
+	if err != nil {
+		return err
+	}
+	finalVersion := strconv.Itoa(incomingVersion + 1)
+	if serverVersion > incomingVersion {
+		// We've had writes since this client has seen this change.
+		// We're doing last write wins, so we're going to call this the latest version.
+		finalVersion = strconv.Itoa(serverVersion + 1)
+	}
 
-    i := 1
-    colQuery := ""
-    updateVals := make([]interface{}, 0, len(changes))
-    for prop, change := range changes {
-        if (i > 1) {
-            colQuery += ", "
-        }
-        colQuery += fmt.Sprintf(`"%s" = $%d`, prop, i)
-        if (prop == "version") {
-            updateVals = append(updateVals, finalVersion)
-        } else {
-            updateVals = append(updateVals, change.Updated)
-        }
-        i++
-    }
-    
-    queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
-    _, err = db.Exec(queryText, append(updateVals, id)...)
-    return err;
+	i := 1
+	colQuery := ""
+	updateVals := make([]interface{}, 0, len(changes))
+	for prop, change := range changes {
+		if i > 1 {
+			colQuery += ", "
+		}
+		colQuery += fmt.Sprintf(`"%s" = $%d`, prop, i)
+		if prop == "version" {
+			updateVals = append(updateVals, finalVersion)
+		} else {
+			updateVals = append(updateVals, change.Updated)
+		}
+		i++
+	}
+
+	queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
+	_, err = db.Exec(queryText, append(updateVals, id)...)
+	return err
 }
 
 type Schema map[string]interface{}
 
 func getObjectAsJson(db *sql.DB, objectName string, id string) (string, error) {
-    query := fmt.Sprintf(`SELECT * FROM "%s" WHERE id = $1`, strings.ToLower(objectName))
-    rows, err := db.Query(query, id)
-    if err != nil {
-        return "", err
-    }
-    defer rows.Close()
+	query := fmt.Sprintf(`SELECT * FROM "%s" WHERE id = $1`, strings.ToLower(objectName))
+	rows, err := db.Query(query, id)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
 
-    // Fetch column names
-    columns, err := rows.Columns()
-    if err != nil {
-        return "", err
-    }
+	// Fetch column names
+	columns, err := rows.Columns()
+	if err != nil {
+		return "", err
+	}
 
-    // Create a slice of interfaces to hold the column values
-    values := make([]interface{}, len(columns))
-    valuePtrs := make([]interface{}, len(columns))
-    for i := range values {
-        valuePtrs[i] = &values[i]
-    }
+	// Create a slice of interfaces to hold the column values
+	values := make([]interface{}, len(columns))
+	valuePtrs := make([]interface{}, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
 
-    // Initialize a map to store the schema
-    schema := Schema{}
+	// Initialize a map to store the schema
+	schema := Schema{}
 
-    // Iterate over the result set (in this case, there should be only one row)
-    if rows.Next() {
-        // Scan the row into the value pointers
-        if err := rows.Scan(valuePtrs...); err != nil {
-            return "", err
-        }
+	// Iterate over the result set (in this case, there should be only one row)
+	if rows.Next() {
+		// Scan the row into the value pointers
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return "", err
+		}
 
-        // Populate the schema map with column names and their corresponding values
-        for i, column := range columns {
-            schema[column] = values[i]
-        }
-    } else {
-        return "", fmt.Errorf("no results found for ID %s", id)
-    }
-    schema["__class"] = objectName
+		// Populate the schema map with column names and their corresponding values
+		for i, column := range columns {
+			schema[column] = values[i]
+		}
+	} else {
+		return "", fmt.Errorf("no results found for ID %s", id)
+	}
+	schema["__class"] = objectName
 
-    // Convert the schema map to JSON
-    jsonData, err := json.Marshal(schema)
-    if err != nil {
-        return "", err
-    }
+	// Convert the schema map to JSON
+	jsonData, err := json.Marshal(schema)
+	if err != nil {
+		return "", err
+	}
 
-    return string(jsonData), nil
+	return string(jsonData), nil
 }
 
 type ChangeRequest struct {
-    id *int;
-    changeType *string;
-    modelId *string;
-    modelType *string;
-    changeSnapshot *ChangeSnapshot;
-
+	id             *int
+	changeType     *string
+	modelId        *string
+	modelType      *string
+	changeSnapshot *ChangeSnapshot
 }
 
 type Change struct {
-    Original string `json:"original"`
-    Updated  string `json:"updated"`
+	Original string `json:"original"`
+	Updated  string `json:"updated"`
 }
 
 type ChangeSnapshot struct {
-    Changes map[string]Change `json:"changes"`
+	Changes map[string]Change `json:"changes"`
 }
 
 type RequestBody struct {
-    ID            int                       `json:"id"`
-    ChangeType    string                    `json:"changeType"`
-    ModelType     string                    `json:"modelType"`
-    ModelID       string                    `json:"modelId"`
-    Model         map[string]interface{}    `json:"model"`
-    ChangeSnapshot ChangeSnapshot           `json:"changeSnapshot"`
+	ID             int                    `json:"id"`
+	ChangeType     string                 `json:"changeType"`
+	ModelType      string                 `json:"modelType"`
+	ModelID        string                 `json:"modelId"`
+	Model          map[string]interface{} `json:"model"`
+	ChangeSnapshot ChangeSnapshot         `json:"changeSnapshot"`
 }
 
 func parseJSONFromBody(r *http.Request) (RequestBody, error) {
-    var reqBody RequestBody
-    body, err := io.ReadAll(r.Body)
-    if err != nil {
-        return reqBody, err
-    }
-    err = json.Unmarshal(body, &reqBody)
-    if err != nil {
-        return reqBody, err
-    }
-    return reqBody, nil
+	var reqBody RequestBody
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return reqBody, err
+	}
+	err = json.Unmarshal(body, &reqBody)
+	if err != nil {
+		return reqBody, err
+	}
+	return reqBody, nil
 }
 
 // Sample handler for changes
 func handleChange(w http.ResponseWriter, r *http.Request) {
-    // Parse the JSON body from the request
-    requestBody, err := parseJSONFromBody(r)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
-        return
-    }
-    w.Header().Set("Content-Type", "application/json")
+	// Parse the JSON body from the request
+	requestBody, err := parseJSONFromBody(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 
-    db := getConn()
-    defer db.Close()
+	db := getConn()
+	defer db.Close()
 
-    // Extract the new email address from the JSON body
-    id := requestBody.ModelID;
-    modelType := requestBody.ModelType;
-    changeType := requestBody.ChangeType;
-    switch (changeType) {
-    case "update":
-        changes := requestBody.ChangeSnapshot.Changes;
+	// Extract the new email address from the JSON body
+	id := requestBody.ModelID
+	modelType := requestBody.ModelType
+	changeType := requestBody.ChangeType
+	switch changeType {
+	case "update":
+		changes := requestBody.ChangeSnapshot.Changes
 
-        if err := updateObject(db, modelType, id, changes); err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-            return;
-        }
+		if err := updateObject(db, modelType, id, changes); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
-        updatedUser, err := getObjectAsJson(db, "User", id)
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-            return;
-        }
-        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedUser)
+		updatedUser, err := getObjectAsJson(db, "User", id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedUser)
 
-        // Implement logic to apply a change to the data model
-        broadcastChange(changeToBroadcast)
-        w.Write([]byte(updatedUser))
-        break
-    case "create":
-        // Insert into database.
-        model := requestBody.Model;
-        if err := insertObject(db, modelType, model); err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-            return;
-        }
-        jsonData, err := json.Marshal(model)
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-            return;
-        }
-        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, jsonData)
+		// Implement logic to apply a change to the data model
+		broadcastChange(changeToBroadcast)
+		w.Write([]byte(updatedUser))
+		break
+	case "create":
+		// Insert into database.
+		model := requestBody.Model
+		if err := insertObject(db, modelType, model); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		jsonData, err := json.Marshal(model)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, jsonData)
 
-        broadcastChange(changeToBroadcast)
-        w.Write([]byte(jsonData))
-        break
-    case "delete":
-        if err := deleteObject(db, modelType, id); err != nil {
-            http.Error(w, err.Error(), http.StatusBadRequest)
-            return;
-        }
-        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s"}}`, changeType, id)
-        broadcastChange(changeToBroadcast)
-        w.Write([]byte(fmt.Sprintf(`{"id": "%s"}`, id)))
-        // Handle delete
-        break
-    default:
-        http.Error(w, "Invalid change type", http.StatusBadRequest)
-    }
+		broadcastChange(changeToBroadcast)
+		w.Write([]byte(jsonData))
+		break
+	case "delete":
+		if err := deleteObject(db, modelType, id); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s"}}`, changeType, id)
+		broadcastChange(changeToBroadcast)
+		w.Write([]byte(fmt.Sprintf(`{"id": "%s"}`, id)))
+		// Handle delete
+		break
+	default:
+		http.Error(w, "Invalid change type", http.StatusBadRequest)
+	}
 }
 
 // Sample handler for syncing
 func handleSync(w http.ResponseWriter, r *http.Request) {
-    conn, err := upgrader.Upgrade(w, r, nil)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Could not open websocket connection because %v", err), http.StatusBadRequest)
-        return
-    }
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not open websocket connection because %v", err), http.StatusBadRequest)
+		return
+	}
 
-    connLock.Lock()
-    connections[conn] = true
-    connLock.Unlock()
+	connLock.Lock()
+	connections[conn] = true
+	connLock.Unlock()
 
-    defer func() {
-        connLock.Lock()
-        delete(connections, conn)
-        connLock.Unlock()
-        conn.Close()
-    }()
+	defer func() {
+		connLock.Lock()
+		delete(connections, conn)
+		connLock.Unlock()
+		conn.Close()
+	}()
 
-    for {
-        _, _, err := conn.ReadMessage()
-        if err != nil {
-            break
-        }
-    }
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+	}
 }
 
 func broadcastChange(message string) {
-    connLock.Lock()
-    defer connLock.Unlock()
+	connLock.Lock()
+	defer connLock.Unlock()
 
-    for conn := range connections {
-        err := conn.WriteMessage(websocket.TextMessage, []byte(message))
-        if err != nil {
-            conn.Close()
-            delete(connections, conn)
-        }
-    }
+	for conn := range connections {
+		err := conn.WriteMessage(websocket.TextMessage, []byte(message))
+		if err != nil {
+			conn.Close()
+			delete(connections, conn)
+		}
+	}
 }

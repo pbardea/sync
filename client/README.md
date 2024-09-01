@@ -44,6 +44,19 @@ Startup:
 
 - Applying change from server -> Update the relevant model in indexdb.
 
+Offline:
+* Add transaction to queue
+* Timeout/detect no connection
+
+TODO: Maybe don't send the version?
+* Reconnect:
+
+  1. Start queueing websocket events
+  1. Emit queued changes (Drain queue)
+  1. Get delta bootstrap
+  1. Apply delta bootstrap
+  1. Start applying changes from server and stop queueing them
+
 ## Server Endpoints
 
 Authentication: Custom JWT. I just need a username and team.
