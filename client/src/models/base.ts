@@ -237,16 +237,16 @@ export class Model {
     // the json from the server.
     lastModifiedDate?: Date;
 
-    save(): void {
+    save() {
+        throw new Error("Not implemented");
+    }
+    _save() {
         throw new Error("Not implemented");
     }
     getJson(): JsonModel {
         throw new Error("Not implemented");
     }
     delete(_applyServerChange = false): void {
-        throw new Error("Not implemented");
-    }
-    _save(): void {
         throw new Error("Not implemented");
     }
 

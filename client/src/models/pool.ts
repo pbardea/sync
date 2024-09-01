@@ -170,13 +170,13 @@ function topologicalSort(objects: any[]): any[] {
     return result.map((objId) => objectsDict[objId]);
 }
 
-export function injestObjects(
+export async function injestObjects(
     jsons: JsonModel[],
     pool = ObjectPool.getInstance(),
 ) {
     const ordered = topologicalSort(jsons);
     for (const json of ordered) {
-        pool.addFromJson(json);
+        await pool.addFromJson(json);
     }
 }
 
@@ -278,28 +278,28 @@ export class ObjectPool {
     }
 
     private updates: ServerUpdate[] = [];
-    addServerChange(update: ServerUpdate) {
+    async addServerChange(update: ServerUpdate) {
       // First process this remote change.
       this.updates.push(update);
       this.drainRemoteTxns();
 
       // Optimization to send local changes when we notice we're back online.
       if (this.txns.length > 0) {
-        this.drainLocalTxns();
+        await this.drainLocalTxns();
         // I have changes to flush and an internet connection came back.
       }
     }
 
-    drainRemoteTxns() {
+    async drainRemoteTxns() {
         if (!this.shouldQueueChanges) {
             for (const update of this.updates) {
-                this.applyServerUpdate(update);
+                await this.applyServerUpdate(update);
             }
         }
     }
 
     @action
-    applyServerUpdate({ type, jsonObject }: ServerUpdate) {
+    async applyServerUpdate({ type, jsonObject }: ServerUpdate) {
         switch (type) {
             case "create": {
                 // This might be a good reason to do the lazy initialization of the
@@ -309,7 +309,7 @@ export class ObjectPool {
                     // Record is already created so we have a more up to date record.
                     return;
                 }
-                this.addFromJson(jsonObject);
+                await this.addFromJson(jsonObject);
                 break;
             }
             case "update": {
@@ -343,7 +343,7 @@ export class ObjectPool {
                 // To update top references, I need to support that lazy sorting I
                 // was talkign about. Let's try a user.
                 elem.delete(true);
-                this.addFromJson(jsonObject);
+                await this.addFromJson(jsonObject);
                 break;
             }
             case "delete": {
@@ -358,7 +358,7 @@ export class ObjectPool {
         // TODO: Persist to local storage.
     }
 
-    addFromJson(json: JsonModel) {
+    async addFromJson(json: JsonModel) {
         const constr: any = ObjectPool.models[json.__class];
         // Constr adds itself to the pool.
         const o = new constr(this, json["id"]);
@@ -419,7 +419,10 @@ export class ObjectPool {
             // Offline mode for testing.
             return;
         }
-        for (const change of this.txns) {
+        const txnsToProcess = [...this.txns].sort((a, b) => a.id - b.id)
+        this.txns = [];
+        // Safe to process now.
+        for (const change of txnsToProcess) {
             try {
                 // Make an async request to change?.
                 await this.apiClient.change(change);
@@ -433,7 +436,6 @@ export class ObjectPool {
                 // If we get a success, that means that the change was accepted. We can
                 // remove this from the local persistance because if we refresh we'll
                 // get the latest from the server.
-                this.txns = this.txns.filter((x) => x.id !== change.id);
                 if (localDB.active) {
                     await localDB.removeTxn(change.id);
                 }
@@ -443,18 +445,18 @@ export class ObjectPool {
                     // TODO: Type this better
                     // If it failed due not being able to connect (ie offline),
                     // then just leave it on the queue.
+
+                    this.txns.push(change)
                     break;
                 } else if ((e as Error).message.includes("rollback")) {
                     this.rollback(change);
                     // TODO: Make a helper and persist.
-                    this.txns = this.txns.filter((x) => x.id !== change.id);
                     if (localDB.active) {
                         await localDB.removeTxn(change.id);
                     }
                     // We did not successfully make a request so keep it in the local queue.
                     console.error(e);
                 } else {
-                    this.txns = this.txns.filter((x) => x.id !== change.id);
                     if (localDB.active) {
                         await localDB.removeTxn(change.id);
                     }
