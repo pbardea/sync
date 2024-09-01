@@ -70,6 +70,7 @@ class ApiClient implements ApiIface {
     }
 
     async deltaBootstrap(start: Date): Promise<BootstrapData> {
+        start.setSeconds(start.getSeconds() + 1);
         try {
             const objects = await this.request<JsonModel[]>(`/delta-bootstrap?start_time=${encodeURIComponent(start.toISOString())}`);
             return { objects: objects };

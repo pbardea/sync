@@ -173,7 +173,7 @@ function topologicalSort(objects: any[]): any[] {
 export function injestObjects(
     jsons: JsonModel[],
     pool = ObjectPool.getInstance(),
-): void {
+) {
     const ordered = topologicalSort(jsons);
     for (const json of ordered) {
         pool.addFromJson(json);
@@ -231,13 +231,10 @@ export class ObjectPool {
                 const deltaBootstrap = await apiClient.deltaBootstrap(start)
                 injestObjects(deltaBootstrap.objects, pool);
 
-                // Presist delta bootstrap to indexdb
-                if (localDB.active) {
-                    for (const jsonObj of deltaBootstrap.objects) {
-                        await localDB.saveJson(jsonObj)
-                    }
+                for (const jsonObj of deltaBootstrap.objects) {
+                    await localDB.saveJson(jsonObj)
                 }
-                
+
                 // TODO: Handle remote deletes.
             }
 
@@ -264,7 +261,9 @@ export class ObjectPool {
         return this.pool[id];
     }
 
-    pool: Record<string, Model> = {};
+    @observable
+    accessor pool: Record<string, Model> = {};
+
     txns: Change[] = [];
 
     @observable
@@ -299,6 +298,7 @@ export class ObjectPool {
         }
     }
 
+    @action
     applyServerUpdate({ type, jsonObject }: ServerUpdate) {
         switch (type) {
             case "create": {
@@ -358,7 +358,7 @@ export class ObjectPool {
         // TODO: Persist to local storage.
     }
 
-    addFromJson(json: JsonModel): void {
+    addFromJson(json: JsonModel) {
         const constr: any = ObjectPool.models[json.__class];
         // Constr adds itself to the pool.
         const o = new constr(this, json["id"]);
@@ -374,16 +374,20 @@ export class ObjectPool {
                 delete this.pool[o.id];
                 o[key] = json[key];
             } else if (key.endsWith("Id")) {
-                // Lookup this ID in the pool
                 const foreignO = this.pool[json[key]];
                 const prop = key.slice(0, -2);
                 o[prop] = foreignO;
+                // This needs to be set to re-trigger the mapping.
+                o.setProperty(prop, foreignO);
+                // Lookup this ID in the pool
             } else {
                 o[key] = json[key];
             }
         }
         this.add(o);
         if (localDB.active) {
+            // Async save to index db.
+            // This is risky. Maybe this entire func should be async.
             localDB.saveJson(json)
         }
 
