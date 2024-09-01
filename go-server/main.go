@@ -312,7 +312,7 @@ func deleteObject(db *sql.DB, object string, id string) error {
 		return err
 	}
 	if count == 0 {
-		return fmt.Errorf("Object with ID %s does not exist", id)
+        return nil
 	}
 
 	// TODO(#10): The client is assuming that they've seen an entire state of the world based on their
@@ -443,7 +443,7 @@ func getObjectAsJson(db *sql.DB, objectName string, id string) (string, error) {
 }
 
 type ChangeRequest struct {
-	id             *int
+	id             *string
 	changeType     *string
 	modelId        *string
 	modelType      *string
@@ -460,7 +460,7 @@ type ChangeSnapshot struct {
 }
 
 type RequestBody struct {
-	ID             int                    `json:"id"`
+	ID             string                 `json:"id"`
 	ChangeType     string                 `json:"changeType"`
 	ModelType      string                 `json:"modelType"`
 	ModelID        string                 `json:"modelId"`
@@ -540,7 +540,7 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s"}}`, changeType, id)
+        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s", "__class": "%s"}}`, changeType, id, modelType)
 		broadcastChange(changeToBroadcast)
 		w.Write([]byte(fmt.Sprintf(`{"id": "%s"}`, id)))
 		// Handle delete

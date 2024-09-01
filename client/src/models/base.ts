@@ -3,6 +3,7 @@
 import { Change, ObjectPool } from "./pool";
 import { JsonModel } from "../api";
 import { action, makeObservable, observable } from "mobx";
+import { v4 } from "uuid";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
 
@@ -111,7 +112,7 @@ export function ClientModel(modelName: string) {
       this._pool.delete(this.id);
 
       const change = {
-        id: 0,
+        id: v4(),
         changeType: "delete",
         modelType: modelName,
         modelId: this.id,
@@ -162,7 +163,7 @@ export function ClientModel(modelName: string) {
       if (original === undefined) {
         const copyThis = this.getJson();
         change = {
-          id: 0,
+          id: v4(),
           changeType: "create",
           modelType: modelName,
           modelId: copyThis.id,
@@ -186,7 +187,7 @@ export function ClientModel(modelName: string) {
         }
 
         change = {
-          id: 0,
+          id: v4(),
           changeType: "update",
           modelType: modelName,
           modelId: this.id,

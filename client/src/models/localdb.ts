@@ -1,7 +1,7 @@
 import { IDBPDatabase, openDB } from "idb";
-import { Change } from "./pool";
 import { Model } from "./base";
 import { JsonModel } from "../api";
+import { Change } from "./transaction_queue";
 
 class LocalDB {
   private db: IDBPDatabase | undefined;
@@ -14,7 +14,7 @@ class LocalDB {
     const instance = new LocalDB();
     try {
       // Setup connection to IndexDB.
-      instance.db = await openDB("sync_testing", 4, {
+      instance.db = await openDB("sync_testing", 5, {
         upgrade(db) {
           if (!db.objectStoreNames.contains("_transactions")) {
             db.createObjectStore("_transactions", { keyPath: "id" });
@@ -28,8 +28,8 @@ class LocalDB {
         },
       });
       instance.active = true;
-    } catch (_e) {
-      // console.debug(e);
+    } catch {
+        // Noop
     }
     return instance;
   }
@@ -41,7 +41,7 @@ class LocalDB {
     await this.db.put("_transactions", txn);
   }
 
-  async removeTxn(id: number) {
+  async removeTxn(id: string) {
     if (!this.db) {
       throw new Error("DB not initialized");
     }
@@ -59,7 +59,8 @@ class LocalDB {
     if (!this.db) {
       throw new Error("DB not initialized");
     }
-    return await this.db.getAll("_transactions");
+    const all = await this.db.getAll("_transactions");
+    return all.sort((a, b) => a.oid - b.oid);
   }
 
   async getAllObjects(): Promise<JsonModel[]> {

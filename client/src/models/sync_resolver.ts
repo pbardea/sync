@@ -81,7 +81,9 @@ export class SyncResolver {
 
     async drainRemoteTxns() {
         if (!this.shouldQueueChanges) {
-            for (const update of this.updates) {
+            const updatesToRun = [...this.updates]
+            this.updates = []
+            for (const update of updatesToRun) {
                 await this.applyServerUpdate(update);
             }
         }

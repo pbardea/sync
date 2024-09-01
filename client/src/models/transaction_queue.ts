@@ -1,3 +1,4 @@
+import { v4 } from "uuid";
 import { ApiIface, JsonModel } from "../api";
 import { localDB } from "./localdb";
 import { ObjectPool } from "./pool";
@@ -12,13 +13,15 @@ type ChangeSnapshot = {
 };
 
 interface BaseChange {
-  id: number;
+  id: string;
+  oid: number;
   modelType: string;
   modelId: string;
 }
 
 class UpdateChange implements BaseChange {
-  id = 0;
+  id = v4();
+  oid: number = 0;
   changeType = "update" as const;
   modelType: string;
   modelId: string;
@@ -36,7 +39,8 @@ class UpdateChange implements BaseChange {
 }
 
 class CreateChange implements BaseChange {
-  id = 0;
+  id = v4();
+  oid: number = 0;
   changeType = "create" as const;
   modelType: string;
   modelId: string;
@@ -50,7 +54,8 @@ class CreateChange implements BaseChange {
 }
 
 class DeletionChange implements BaseChange {
-  id = 0;
+  id = v4();
+  oid = 0;
   changeType = "delete" as const;
   modelType: string;
   modelId: string;
@@ -67,6 +72,7 @@ class DeletionChange implements BaseChange {
 // TransactionQueue is responsible for managing the state of local transactions.
 export class TransactionQueue {
   txns: Change[] = [];
+  running_txns: Change[] = [];
   apiClient: ApiIface;
   pool: ObjectPool;
 
@@ -85,15 +91,13 @@ export class TransactionQueue {
       // TODO: If safe, we can optimize this with batching.
       // This also applies them to the in-memory state
       await this.pool.apply(change);
-      this.addChange(change);
+      await this.addChange(change);
     }
-
-    // Attempt to send out the changes.
-    await this.drainLocalTxns();
   }
 
   async addChange(change: Change): Promise<void> {
-    change.id = this.txns.length;
+    const local = await localDB.getAllTxn();
+    change.oid = local.length;
     if (localDB.active) {
       await localDB.saveTxn(change);
     }
@@ -108,15 +112,26 @@ export class TransactionQueue {
       // Offline mode for testing.
       return;
     }
-    const txnsToProcess = [...this.txns].sort((a, b) => a.id - b.id);
+    if (this.running_txns.length > 0) {
+        // Effiectively a lock.
+        return;
+    }
+    this.running_txns = [...this.txns].sort((a, b) => a.oid - b.oid);
     this.txns = [];
     // Safe to process now.
-    for (const change of txnsToProcess) {
+    for (const change of this.running_txns) {
       try {
         // Make an async request to change?.
         await this.apiClient.change(change);
-        // TODO: Smells off
-        this.pool.apply(change);
+        if (change.changeType === "delete") {
+            if (localDB.active) {
+                try {
+                    await localDB.removeObject(change.modelType, change.modelId);
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        }
 
         // I don't think that we need the server version with Lamport timestamps.
 
@@ -141,7 +156,9 @@ export class TransactionQueue {
           break;
         } else if ((e as Error).message.includes("rollback")) {
           await this.pool.rollback(change);
-          this.txns = this.txns.filter((x) => x.id !== change.id);
+          if (localDB.active) {
+            await localDB.removeTxn(change.id);
+          }
           // We did not successfully make a request so keep it in the local queue.
           console.error(e);
         } else {
@@ -153,5 +170,7 @@ export class TransactionQueue {
         }
       }
     }
+    // Free lock
+    this.running_txns = [];
   }
 }
