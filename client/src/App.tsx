@@ -4,6 +4,8 @@ import { observer } from "mobx-react";
 import { Team } from "./models/team";
 import { User } from "./models/user";
 import { computed } from "mobx";
+import { Button } from "@/components/ui/button";
+import { Input } from "./components/ui/input";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 const debounce = (callback: Function, wait: number) => {
@@ -109,12 +111,12 @@ const App = observer((props: { team: Team }) => {
             </select>
 
             <div className="card">
-                <button onClick={createNewUser}>Create new user</button>
-                <button onClick={deleteLastUser}>Delete selected user</button>
-                <button onClick={() => setCount((count) => count + 1)}>
+                <Button onClick={createNewUser}>Create new user</Button>
+                <Button onClick={deleteLastUser}>Delete selected user</Button>
+                <Button onClick={() => setCount((count) => count + 1)}>
                     count is {count}
-                </button>
-                <input onChange={handleInputChange} />
+                </Button>
+                <Input onChange={handleInputChange} />
                 <p>
                     Edit <code>src/App.tsx</code> and save to test HMR
                 </p>
