@@ -1,15 +1,23 @@
 "use client";
 
-import { Calendar, CheckSquare, Plane, Dumbbell, FileText } from "lucide-react";
+import {
+    Calendar,
+    CheckSquare,
+    Plane,
+    Dumbbell,
+    FileText,
+    Home,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 export function SideNavigation() {
     return (
         <nav className="flex flex-col w-64 h-screen bg-gray-50 text-gray-800">
             <div className="p-4">
-                <h1 className="text-2xl font-bold">Menu</h1>
+                <h1 className="text-2xl font-bold">Home Base</h1>
             </div>
             <ul className="flex-1 px-2">
+                <NavItem href="/" icon={<Home size={20} />} label="Home" />
                 <NavItem
                     href="/calendar"
                     icon={<Calendar size={20} />}
