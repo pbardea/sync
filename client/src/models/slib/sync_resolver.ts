@@ -129,18 +129,18 @@ export class SyncResolver {
         if (localDB.active) {
             await localDB.saveJson(elem.getJson())
         }
-        // for (const property in jsonObject) {
-        //     if (property.startsWith("_")) {
-        //         continue
-        //     }
-        //     elem.setProperty(property, jsonObject[property]);
-        // }
+        for (const property in jsonObject) {
+            if (property.startsWith("_")) {
+                continue
+            }
+            elem.setProperty(property, jsonObject[property]);
+        }
 
-        // NB: This approach doesn't work well when modifying the root it seems.
-        // To update top references, I need to support that lazy sorting I
-        // was talkign about. Let's try a user.
-        elem.delete(true);
-        await this.pool.addFromJson(jsonObject);
+        // // NB: This approach doesn't work well when modifying the root it seems.
+        // // To update top references, I need to support that lazy sorting I
+        // // was talkign about. Let's try a user.
+        // elem.delete(true);
+        // await this.pool.addFromJson(jsonObject);
 
         break;
       }
