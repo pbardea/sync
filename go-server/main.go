@@ -26,7 +26,7 @@ var jwtKey = []byte("my_secret_key")
 // Claims defines the structure for JWT claims
 type Claims struct {
 	Username string `json:"username"`
-	Team     string `json:"team"`
+	Home     string `json:"home"`
 	jwt.RegisteredClaims
 }
 
@@ -98,7 +98,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		// Store claims in context if you need them later
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, "username", claims.Username)
-		ctx = context.WithValue(ctx, "team", claims.Team)
+		ctx = context.WithValue(ctx, "home", claims.Home)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -106,14 +106,14 @@ func authMiddleware(next http.Handler) http.Handler {
 
 // Handle the login and generate JWT
 func handleLogin(w http.ResponseWriter, r *http.Request) {
-	var username, team string
+	var username, home string
 	username = r.FormValue("username")
-	team = r.FormValue("team")
+	home = r.FormValue("home")
 
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Username: username,
-		Team:     team,
+		Home:     home,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
@@ -227,6 +227,7 @@ type tombstone struct {
 type bootstrapResponse struct {
 	Objects    []map[string]interface{}
 	Tombstones []tombstone
+    LatestTS   string
 }
 
 // Sample handler for bootstrap
@@ -244,7 +245,7 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
 
-	objectsToBootstrap := []string{"Team", "User"}
+	objectsToBootstrap := []string{"Home", "User"}
 	for _, object := range objectsToBootstrap {
 		if dataArr, err := writeObject(db, object); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -289,7 +290,7 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
 
-	objectsToBootstrap := []string{"Team", "User"}
+	objectsToBootstrap := []string{"Home", "User"}
 	for _, object := range objectsToBootstrap {
 		if dataArr, err := writeObjectDelta(db, object, &start); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -298,7 +299,8 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones}
+    now := time.Now().Format("2006-01-02T15:04:05Z");
+    resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones, LatestTS: now}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -352,8 +354,12 @@ func insertObject(db *sql.DB, object string, model map[string]interface{}) error
 	}
 
 	queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
+	if _, err := db.Exec(queryText, values...); err != nil {
+        return err
+    }
 
-	_, err := db.Exec(queryText, values...)
+	queryText = fmt.Sprintf(`UPDATE "%s" SET "lastModifiedDate" = now() WHERE id = $1`, strings.ToLower(object))
+    _, err := db.Exec(queryText, model["id"])
 	return err
 }
 
@@ -507,16 +513,16 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		updatedUser, err := getObjectAsJson(db, "User", id)
+		updatedObj, err := getObjectAsJson(db, modelType, id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedUser)
+		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedObj)
 
 		// Implement logic to apply a change to the data model
 		broadcastChange(changeToBroadcast)
-		w.Write([]byte(updatedUser))
+		w.Write([]byte(updatedObj))
 		break
 	case "create":
 		// Insert into database.
@@ -525,15 +531,15 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		jsonData, err := json.Marshal(model)
+		obj, err := getObjectAsJson(db, modelType, id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, jsonData)
+		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, obj)
 
 		broadcastChange(changeToBroadcast)
-		w.Write([]byte(jsonData))
+		w.Write([]byte(obj))
 		break
 	case "delete":
 		if err := deleteObject(db, modelType, id); err != nil {

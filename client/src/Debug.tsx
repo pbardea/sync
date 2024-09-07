@@ -1,7 +1,7 @@
 import { ChangeEvent, useCallback, useMemo, useState } from "react";
 import { observer } from "mobx-react";
-import { Team } from "./models/team";
-import { User } from "./models/user";
+import { Team } from "./models/test_app/team";
+import { User } from "./models/test_app/user";
 import { computed } from "mobx";
 import { Button } from "@/components/ui/button";
 import { Input } from "./components/ui/input";
