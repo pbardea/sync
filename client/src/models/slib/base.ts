@@ -59,8 +59,8 @@ export function ManyToOne(fkName: string) {
                     if (newId) {
                         const newObj = this._pool.get(newId);
                         if (!newObj[fkName].find((x: Model) => x.id === this.id)) {
-                            newObj.setProperty(fkName, newObj[fkName]);
                             newObj[fkName].push(this);
+                            newObj.setProperty(fkName, newObj[fkName]);
                         }
                     }
 
