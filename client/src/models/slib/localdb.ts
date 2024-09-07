@@ -41,7 +41,7 @@ class LocalDB {
       if (!this.db) {
           throw new Error("DB not initialized");
       }
-      return await this.db.get("_meta", "latest_ts");
+      return (await this.db.get("_meta", "latest_ts") as {ts: string})["ts"];
   }
 
   async saveLatestTs(ts: string) {

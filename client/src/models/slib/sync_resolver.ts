@@ -145,9 +145,7 @@ export class SyncResolver {
         // // was talkign about. Let's try a user.
         // elem.delete(true);
         // await this.pool.addFromJson(jsonObject);
-        // console.log("Updated object");
-        // console.log(jsonObject);
-        // console.log(this.pool.get(jsonObject.id));
+
         break;
       }
       case "delete": {
