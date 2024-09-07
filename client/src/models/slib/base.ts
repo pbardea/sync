@@ -133,7 +133,7 @@ export function ClientModel(modelName: string) {
         const refKey = idKey.slice(0, -2);
         this[refKey] = undefined;
       }
-      this._save(true);
+      this._save();
     };
 
     target.prototype.getJson = function () {
@@ -158,7 +158,7 @@ export function ClientModel(modelName: string) {
       return o;
     };
 
-    target.prototype._save = function (serverChange: boolean) {
+    target.prototype._save = function (serverChange: boolean = true) {
       let change: Change;
       const original = this[originalKey];
 

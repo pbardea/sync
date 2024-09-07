@@ -254,7 +254,8 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := bootstrapResponse{Objects: finalArr, Tombstones: []tombstone{}}
+    now := time.Now().UTC().Format("2006-01-02T15:04:05Z");
+    resp := bootstrapResponse{Objects: finalArr, Tombstones: []tombstone{}, LatestTS: now}
 	fmt.Printf("%+v\n", resp)
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -299,7 +300,7 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-    now := time.Now().Format("2006-01-02T15:04:05Z");
+    now := time.Now().UTC().Format("2006-01-02T15:04:05Z");
     resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones, LatestTS: now}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -392,7 +393,7 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
 		i++
 	}
 
-	queryText := fmt.Sprintf(`UPDATE "%s" SET %s WHERE id = $%d`, strings.ToLower(object), colQuery, i)
+	queryText := fmt.Sprintf(`UPDATE "%s" SET %s, %s WHERE id = $%d`, strings.ToLower(object), colQuery, `"lastModifiedDate" = now()`, i)
 	_, err = db.Exec(queryText, append(updateVals, id)...)
 	return err
 }

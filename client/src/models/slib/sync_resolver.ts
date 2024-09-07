@@ -49,11 +49,6 @@ export class SyncResolver {
       // TODO: Update this to look at the last sync ID from the last bootstrap.
       // We should have a global monotonically increasing ID whenever a change is
       // registered on the server.
-      // const start = localObjs.reduce((acc: Date, m: JsonModel) => {
-      //   const modelDate = new Date(m.lastModifiedDate ?? 0);
-      //   acc = acc > modelDate ? acc : modelDate;
-      //   return acc;
-      // }, new Date(0));
       const tsString = (await localDB.getLatestTs()) ?? 0;
       const start = new Date(tsString);
 
@@ -134,17 +129,18 @@ export class SyncResolver {
         if (localDB.active) {
             await localDB.saveJson(elem.getJson())
         }
-        for (const property in jsonObject) {
-            if (property.startsWith("_")) {
-                continue
-            }
-            elem.setProperty(property, jsonObject[property]);
-        }
+        // for (const property in jsonObject) {
+        //     if (property.startsWith("_")) {
+        //         continue
+        //     }
+        //     elem.setProperty(property, jsonObject[property]);
+        // }
 
-        // // To update top references, I need to support that lazy sorting I
-        // // was talkign about. Let's try a user.
-        // elem.delete(true);
-        // await this.pool.addFromJson(jsonObject);
+        // NB: This approach doesn't work well when modifying the root it seems.
+        // To update top references, I need to support that lazy sorting I
+        // was talkign about. Let's try a user.
+        elem.delete(true);
+        await this.pool.addFromJson(jsonObject);
 
         break;
       }

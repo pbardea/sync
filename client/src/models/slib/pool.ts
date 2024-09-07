@@ -92,7 +92,7 @@ export class ObjectPool {
     // Save and don't flush this as a change.
     // Not flushing the change is only safe when we know user code won't
     // run concurrently.
-    o._save(true);
+    o._save();
   }
 
   @action
@@ -105,7 +105,7 @@ export class ObjectPool {
 
   @action
   add(model: Model): void {
-    if (this.root === undefined) {
+    if (this.root === undefined || this.root.id === model.id) {
       this.root = model;
     }
     this.pool[model.id] = model;
