@@ -5,17 +5,17 @@ import { makeObservable, observable } from "mobx";
 
 @ClientModel("Home")
 export class Home extends Model {
-  @observable
-  @Property()
-  accessor name: string;
+    @observable
+    @Property()
+    accessor name: string;
 
-  @observable
-  @OneToMany("home")
-  public accessor members: User[] = [];
+    @observable
+    @OneToMany("home")
+    public accessor members: User[] = [];
 
-  constructor(id = v4()) {
-    super(id);
-    this.name = "";
-    makeObservable(this);
-  }
+    constructor(id = v4()) {
+        super(id);
+        this.name = "";
+        makeObservable(this);
+    }
 }
