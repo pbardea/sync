@@ -9,8 +9,6 @@ import { mainApi } from "./models/slib/api";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./Root.tsx";
 import Settings from "./Settings.tsx";
-import Fitness from "./Fitness.tsx";
-import Chores from "./Chores.tsx";
 import { Trip } from "./models/trip.ts";
 
 // Startup
@@ -37,47 +35,7 @@ const router = createBrowserRouter([
         ),
     },
     {
-        path: "/chores",
-        element: (
-            <Root>
-                <Chores />
-            </Root>
-        ),
-    },
-    {
         path: "/trips",
-        element: (
-            <Root>
-                <App />
-            </Root>
-        ),
-    },
-    {
-        path: "/fitness",
-        element: (
-            <Root>
-                <Fitness />
-            </Root>
-        ),
-    },
-    {
-        path: "/health",
-        element: (
-            <Root>
-                <App />
-            </Root>
-        ),
-    },
-    {
-        path: "/calendar",
-        element: (
-            <Root>
-                <App />
-            </Root>
-        ),
-    },
-    {
-        path: "/documents",
         element: (
             <Root>
                 <App />
