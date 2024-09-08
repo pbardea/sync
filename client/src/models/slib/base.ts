@@ -5,6 +5,7 @@ import { JsonModel } from "./api";
 import { action, makeObservable, observable } from "mobx";
 import { v4 } from "uuid";
 import { Change } from "./transaction_queue";
+import { Collection } from "./collection";
 (Symbol as any).metadata ??= Symbol.for("Symbol.metadata");
 // TODO: Figure out how to polyfill this w/ build system.
 
@@ -12,7 +13,6 @@ const propKey = Symbol("properties");
 const refKey = Symbol("references");
 const originalKey = Symbol("original");
 
-// TODO: Increase type safety w/ generic.
 export function ManyToOne(fkName: string) {
     return (_: any, { kind, name, metadata, addInitializer }: any) => {
         if (kind !== "accessor") {
@@ -82,6 +82,53 @@ export function OneToMany(_name: string) {
     };
 }
 
+// Example: @ManyToMany<User>("trips")
+// This keeps u.trips up to date with this value.
+export function ManyToMany(fkName: string) {
+    return (_: any, { kind, name, metadata, addInitializer }: any) => {
+        if (kind !== "accessor") {
+            throw new Error("ManyToOne can only be used on accessors");
+        }
+        const idKey = name + "Id";
+
+        addInitializer(function() {
+            const className = this.constructor.name;
+            if (metadata[propKey] === undefined) {
+                metadata[propKey] = {};
+            }
+            if (metadata[propKey][className] === undefined) {
+                metadata[propKey][className] = {};
+            }
+            metadata[propKey][className][idKey] = true;
+
+            let entity: any = undefined;
+            Object.defineProperty(this, name, {
+                get: () => entity,
+                set: (newVal: Collection<any>) => {
+                    // When a new collection is set, register the right things.
+                    newVal.register(this.id, fkName);
+                    entity = newVal;
+                },
+                enumerable: true,
+                configurable: true,
+            });
+
+            // Register a getter for the ID version of this field.
+            const propName = name + "Id";
+            Object.defineProperty(this, propName, {
+                get: () => this[name].getIds,
+                set: (_: any) => {
+                    throw new Error("Cannot set a collection");
+                },
+                enumerable: true,
+                configurable: true,
+            });
+
+        });
+    };
+}
+
+// TODO: Fix this isCollection flag.
 export function Property() {
     return function dec(
         _value: any,

@@ -199,6 +199,10 @@ func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string
 				data[columns[i]] = v
 			} else if "time.Time" == fmt.Sprintf("%T", v) {
 				data[columns[i]] = v
+			} else if "[]uint8" == fmt.Sprintf("%T", v) {
+                var jsonThing interface{}
+                json.Unmarshal([]byte(v.([]uint8)), &jsonThing)
+                data[columns[i]] = jsonThing
 			} else {
 				x := v.(string)
 				if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
@@ -227,7 +231,7 @@ type tombstone struct {
 type bootstrapResponse struct {
 	Objects    []map[string]interface{}
 	Tombstones []tombstone
-    LatestTS   string
+	LatestTS   string
 }
 
 // Sample handler for bootstrap
@@ -245,7 +249,7 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
 
-	objectsToBootstrap := []string{"Home", "User"}
+	objectsToBootstrap := []string{"Home", "User", "Trip"}
 	for _, object := range objectsToBootstrap {
 		if dataArr, err := writeObject(db, object); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -254,8 +258,8 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-    now := time.Now().UTC().Format("2006-01-02T15:04:05Z");
-    resp := bootstrapResponse{Objects: finalArr, Tombstones: []tombstone{}, LatestTS: now}
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	resp := bootstrapResponse{Objects: finalArr, Tombstones: []tombstone{}, LatestTS: now}
 	fmt.Printf("%+v\n", resp)
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -291,7 +295,7 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
 
-	objectsToBootstrap := []string{"Home", "User"}
+	objectsToBootstrap := []string{"Home", "User", "Trip"}
 	for _, object := range objectsToBootstrap {
 		if dataArr, err := writeObjectDelta(db, object, &start); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -300,8 +304,8 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-    now := time.Now().UTC().Format("2006-01-02T15:04:05Z");
-    resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones, LatestTS: now}
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	resp := bootstrapResponse{Objects: finalArr, Tombstones: tombstones, LatestTS: now}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -315,7 +319,7 @@ func deleteObject(db *sql.DB, object string, id string) error {
 		return err
 	}
 	if count == 0 {
-        return nil
+		return nil
 	}
 
 	// TODO(#10): The client is assuming that they've seen an entire state of the world based on their
@@ -356,11 +360,11 @@ func insertObject(db *sql.DB, object string, model map[string]interface{}) error
 
 	queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
 	if _, err := db.Exec(queryText, values...); err != nil {
-        return err
-    }
+		return err
+	}
 
 	queryText = fmt.Sprintf(`UPDATE "%s" SET "lastModifiedDate" = now() WHERE id = $1`, strings.ToLower(object))
-    _, err := db.Exec(queryText, model["id"])
+	_, err := db.Exec(queryText, model["id"])
 	return err
 }
 
@@ -547,7 +551,7 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-        changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s", "__class": "%s"}}`, changeType, id, modelType)
+		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": {"id": "%s", "__class": "%s"}}`, changeType, id, modelType)
 		broadcastChange(changeToBroadcast)
 		w.Write([]byte(fmt.Sprintf(`{"id": "%s"}`, id)))
 		// Handle delete

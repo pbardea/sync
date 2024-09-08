@@ -2,6 +2,8 @@ import { v4 } from "uuid";
 import { ClientModel, ManyToOne, Model, Property } from "./slib/base";
 import { Home } from "./home";
 import { makeObservable, observable } from "mobx";
+import { Trip } from "./trip";
+import { Collection } from "./slib/collection";
 
 @ClientModel("User")
 export class User extends Model {
@@ -17,6 +19,12 @@ export class User extends Model {
     @observable
     @ManyToOne("members")
     public accessor home: Home | undefined = undefined;
+
+    @observable
+    // @ManyToMany<User>("trips");
+    // Register a callback that keeps this arrray in sync with actions that
+    // happen on the coresponding array.
+    public accessor trips: Collection<Trip> = new Collection<Trip>();
 
     constructor(id = v4()) {
         super(id);

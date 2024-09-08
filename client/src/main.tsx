@@ -11,26 +11,28 @@ import Root from "./Root.tsx";
 import Settings from "./Settings.tsx";
 import Fitness from "./Fitness.tsx";
 import Chores from "./Chores.tsx";
+import { Trip } from "./models/trip.ts";
 
 // Startup
 await ObjectPool.init(mainApi);
 User.init();
 Home.init();
+Trip.init();
 try {
     await mainApi.login("pbardea", "password");
 } catch (e) {
     console.error(e);
 }
 
-const pool = ObjectPool.getInstance()
-export const PoolContext = createContext<ObjectPool>(pool)
+const pool = ObjectPool.getInstance();
+export const PoolContext = createContext<ObjectPool>(pool);
 
 const router = createBrowserRouter([
     {
         path: "/",
         element: (
             <Root>
-            <App />
+                <App />
             </Root>
         ),
     },
@@ -38,7 +40,7 @@ const router = createBrowserRouter([
         path: "/chores",
         element: (
             <Root>
-            <Chores />
+                <Chores />
             </Root>
         ),
     },
@@ -46,7 +48,7 @@ const router = createBrowserRouter([
         path: "/trips",
         element: (
             <Root>
-            <App />
+                <App />
             </Root>
         ),
     },
@@ -54,7 +56,7 @@ const router = createBrowserRouter([
         path: "/fitness",
         element: (
             <Root>
-            <Fitness />
+                <Fitness />
             </Root>
         ),
     },
@@ -62,7 +64,7 @@ const router = createBrowserRouter([
         path: "/health",
         element: (
             <Root>
-            <App />
+                <App />
             </Root>
         ),
     },
@@ -70,7 +72,7 @@ const router = createBrowserRouter([
         path: "/calendar",
         element: (
             <Root>
-            <App />
+                <App />
             </Root>
         ),
     },
@@ -78,7 +80,7 @@ const router = createBrowserRouter([
         path: "/documents",
         element: (
             <Root>
-            <App />
+                <App />
             </Root>
         ),
     },
@@ -86,7 +88,7 @@ const router = createBrowserRouter([
         path: "/settings",
         element: (
             <Root>
-            <Settings />
+                <Settings />
             </Root>
         ),
     },
@@ -94,8 +96,8 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-    <PoolContext.Provider value={pool}>
-    <RouterProvider router={router} />
-    </PoolContext.Provider>
+        <PoolContext.Provider value={pool}>
+            <RouterProvider router={router} />
+        </PoolContext.Provider>
     </StrictMode>,
 );

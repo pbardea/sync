@@ -6,6 +6,7 @@ import { action, computed, observable } from "mobx";
 import { localDB } from "./localdb";
 import { SyncResolver } from "./sync_resolver";
 import { Change, TransactionQueue } from "./transaction_queue";
+import { Collection } from "./collection";
 
 // ObjectPool is where we put models from the network.
 // Models register their changes in the pool so that their changes are sent to the sync system.
@@ -75,12 +76,18 @@ export class ObjectPool {
                 continue;
             }
             if (key.endsWith("Id")) {
-                const foreignO = this.pool[json[key]];
                 const prop = key.slice(0, -2);
-                o[prop] = foreignO;
+                if (Array.isArray(json[key])) {
+                    // TODO: Members is too specific of an example here.
+                    const members = json[key].map((id: string) => this.pool[id]);
+                    o[prop] = new Collection();
+                    members.forEach((member: any) => o[prop].push(member));
+                } else {
+                    const foreignO = this.pool[json[key]];
+                    o[prop] = foreignO;
+                }
                 // This needs to be set to re-trigger the mapping.
-                o.setProperty(prop, foreignO);
-                // Lookup this ID in the pool
+                o.setProperty(prop, o[prop]);
             } else {
                 o[key] = json[key];
             }
