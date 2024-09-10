@@ -10,6 +10,7 @@ export class Trip extends Model {
     @Property()
     accessor name: string = "";
 
+    // This is the one to set.
     @observable
     @ManyToMany("trips")
     public accessor members = new Collection<User>();

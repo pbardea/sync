@@ -140,6 +140,7 @@ func getTombstones(db *sql.DB, start *time.Time) ([]tombstone, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	dataArr := make([]tombstone, 0)
 	for rows.Next() {
@@ -155,19 +156,7 @@ func getTombstones(db *sql.DB, start *time.Time) ([]tombstone, error) {
 	return dataArr, nil
 }
 
-func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
-	// TODO: This is a bad practice, but an effecitve hack.
-	queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
-	args := make([]any, 0)
-	if start != nil {
-		queryText += fmt.Sprintf(` WHERE "lastModifiedDate" > $1`)
-		args = append(args, start)
-	}
-
-	rows, err := db.Query(queryText, args...)
-	if err != nil {
-		return nil, err
-	}
+func getRowsAsJson(rows *sql.Rows, object string) ([]map[string]interface{}, error) {
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -200,9 +189,9 @@ func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string
 			} else if "time.Time" == fmt.Sprintf("%T", v) {
 				data[columns[i]] = v
 			} else if "[]uint8" == fmt.Sprintf("%T", v) {
-                var jsonThing interface{}
-                json.Unmarshal([]byte(v.([]uint8)), &jsonThing)
-                data[columns[i]] = jsonThing
+				var jsonThing interface{}
+				json.Unmarshal([]byte(v.([]uint8)), &jsonThing)
+				data[columns[i]] = jsonThing
 			} else {
 				x := v.(string)
 				if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
@@ -220,6 +209,24 @@ func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string
 	}
 
 	return dataArr, nil
+}
+
+func writeObjectDelta(db *sql.DB, object string, start *time.Time) ([]map[string]interface{}, error) {
+	// TODO: This is a bad practice, but an effecitve hack.
+	queryText := fmt.Sprintf(`SELECT * FROM "%s"`, strings.ToLower(object))
+	args := make([]any, 0)
+	if start != nil {
+		queryText += fmt.Sprintf(` WHERE "lastModifiedDate" > $1`)
+		args = append(args, start)
+	}
+
+	rows, err := db.Query(queryText, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return getRowsAsJson(rows, object)
 }
 
 type tombstone struct {
@@ -260,7 +267,6 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	resp := bootstrapResponse{Objects: finalArr, Tombstones: []tombstone{}, LatestTS: now}
-	fmt.Printf("%+v\n", resp)
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -392,7 +398,17 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
 		if prop == "version" {
 			updateVals = append(updateVals, finalVersion)
 		} else {
-			updateVals = append(updateVals, change.Updated)
+			value := change.Updated
+			if arr, ok := value.([]interface{}); ok {
+				// If value is []interface{}, JSON stringify it
+				jsonValue, err := json.Marshal(arr)
+				if err != nil {
+					return err
+				}
+				updateVals = append(updateVals, string(jsonValue))
+			} else {
+				updateVals = append(updateVals, value)
+			}
 		}
 		i++
 	}
@@ -404,53 +420,19 @@ func updateObject(db *sql.DB, object string, id string, changes map[string]Chang
 
 type Schema map[string]interface{}
 
-func getObjectAsJson(db *sql.DB, objectName string, id string) (string, error) {
+func getObjectAsJson(db *sql.DB, objectName string, id string) (map[string]interface{}, error) {
 	query := fmt.Sprintf(`SELECT * FROM "%s" WHERE id = $1`, strings.ToLower(objectName))
 	rows, err := db.Query(query, id)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer rows.Close()
 
-	// Fetch column names
-	columns, err := rows.Columns()
+	jsonRows, err := getRowsAsJson(rows, objectName)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	// Create a slice of interfaces to hold the column values
-	values := make([]interface{}, len(columns))
-	valuePtrs := make([]interface{}, len(columns))
-	for i := range values {
-		valuePtrs[i] = &values[i]
-	}
-
-	// Initialize a map to store the schema
-	schema := Schema{}
-
-	// Iterate over the result set (in this case, there should be only one row)
-	if rows.Next() {
-		// Scan the row into the value pointers
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return "", err
-		}
-
-		// Populate the schema map with column names and their corresponding values
-		for i, column := range columns {
-			schema[column] = values[i]
-		}
-	} else {
-		return "", fmt.Errorf("no results found for ID %s", id)
-	}
-	schema["__class"] = objectName
-
-	// Convert the schema map to JSON
-	jsonData, err := json.Marshal(schema)
-	if err != nil {
-		return "", err
-	}
-
-	return string(jsonData), nil
+	return jsonRows[0], nil
 }
 
 type ChangeRequest struct {
@@ -523,12 +505,24 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, updatedObj)
+		jsonStr, err := json.Marshal(updatedObj)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		changeObj := map[string]interface{}{
+			"type":       changeType,
+			"jsonObject": updatedObj,
+		}
+		changeObjStr, err := json.Marshal(changeObj)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		// Implement logic to apply a change to the data model
-		broadcastChange(changeToBroadcast)
-		w.Write([]byte(updatedObj))
-		break
+		broadcastChange(string(changeObjStr))
+		w.Write([]byte(jsonStr))
 	case "create":
 		// Insert into database.
 		model := requestBody.Model
@@ -544,8 +538,14 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, obj)
 
 		broadcastChange(changeToBroadcast)
-		w.Write([]byte(obj))
-		break
+
+		jsonStr, err := json.Marshal(obj)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Write([]byte(jsonStr))
 	case "delete":
 		if err := deleteObject(db, modelType, id); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -555,7 +555,6 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 		broadcastChange(changeToBroadcast)
 		w.Write([]byte(fmt.Sprintf(`{"id": "%s"}`, id)))
 		// Handle delete
-		break
 	default:
 		http.Error(w, "Invalid change type", http.StatusBadRequest)
 	}

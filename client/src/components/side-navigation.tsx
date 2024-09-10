@@ -1,4 +1,4 @@
-import { Plane, Home as HomeIcon, SettingsIcon } from "lucide-react";
+import { Plane, Home as HomeIcon, SettingsIcon, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { observer } from "mobx-react";
 import { useContext } from "react";
@@ -15,6 +15,7 @@ export const SideNavigation = observer(() => {
             </div>
             <ul className="flex-1 px-2">
                 <NavItem href="/" icon={<HomeIcon size={20} />} label="Home" />
+                <NavItem href="/trips" icon={<Clock size={20} />} label="Habbits" />
                 <NavItem href="/trips" icon={<Plane size={20} />} label="Trips" />
                 <NavItem
                     href="/settings"

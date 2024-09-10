@@ -33,13 +33,18 @@ export class Collection<T extends Model> {
         return this.itemIds;
     }
 
+    filter(callback: (_value: T) => boolean) {
+        this.items = this.items.filter(callback);
+        this.itemIds = this.itemIds.filter((id) => this.items.map((i) => i.id).includes(id));
+    }
+
     delete(item: T) {
         this.items = this.items.filter((i) => i.id !== item.id);
         this.itemIds = this.itemIds.filter((id) => id !== item.id);
 
         if (this.fkName) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (item as any)[this.fkName] = (item as any)[this.fkName].filter((t: any) => t.id !== this.objId);
+            (item as any)[this.fkName].filter((t: any) => t.id !== this.objId);
         }
     }
 

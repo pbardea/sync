@@ -106,7 +106,9 @@ export function ManyToMany(fkName: string) {
                 get: () => entity,
                 set: (newVal: Collection<any>) => {
                     // When a new collection is set, register the right things.
-                    newVal.register(this.id, fkName);
+                    if (newVal) {
+                        newVal.register(this.id, fkName);
+                    }
                     entity = newVal;
                 },
                 enumerable: true,
@@ -118,7 +120,7 @@ export function ManyToMany(fkName: string) {
             Object.defineProperty(this, propName, {
                 get: () => this[name].getIds,
                 set: (_: any) => {
-                    throw new Error("Cannot set a collection");
+                    throw new Error("Cannot set IDs collection");
                 },
                 enumerable: true,
                 configurable: true,
@@ -203,6 +205,8 @@ export function ClientModel(modelName: string) {
             const className = this.constructor.name;
             const refKeys = Object.keys(metadata[refKey]?.[className] ?? {});
 
+            const props = Object.keys(metadata[propKey]?.[className] ?? {});
+
             // Remove all references.
             const o = JSON.parse(
                 JSON.stringify(this, (key, value) => {
@@ -213,15 +217,17 @@ export function ClientModel(modelName: string) {
                     ) {
                         return undefined;
                     }
+                    if (key && !props.includes(key)) {
+                        return undefined;
+                    }
                     return value;
                 }),
             );
-            const props = Object.keys(metadata[propKey]?.[className] ?? {});
             for (const prop of props) {
                 o[prop] = this[prop];
             }
             o["__class"] = modelName;
-            return o;
+            return JSON.parse(JSON.stringify(o));
         };
 
         target.prototype._save = function(serverChange: boolean = true) {
@@ -236,7 +242,7 @@ export function ClientModel(modelName: string) {
                     changeType: "create",
                     modelType: modelName,
                     modelId: copyThis.id,
-                    model: JSON.parse(JSON.stringify(copyThis)),
+                    model: copyThis,
                 };
                 this[originalKey] = copyThis;
             } else {
@@ -249,7 +255,12 @@ export function ClientModel(modelName: string) {
                             original: original[property] ?? null,
                             updated: this[property] ?? null,
                         };
-                        this[originalKey][property] = this[property];
+                        // Copy over references.
+                        if (this[property] instanceof Array) {
+                            this[originalKey][property] = Array.from(this[property]);
+                        } else {
+                            this[originalKey][property] = this[property];
+                        }
                     }
                 });
                 if (Object.keys(changes).length === 0) {

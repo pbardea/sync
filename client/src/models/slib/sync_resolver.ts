@@ -1,4 +1,5 @@
 import { ApiIface, JsonModel } from "./api";
+import { Collection } from "./collection";
 import { localDB } from "./localdb";
 import { ObjectPool } from "./pool";
 import { topologicalSort } from "./utils";
@@ -126,21 +127,33 @@ export class SyncResolver {
         }
 
         // This works better than removing and adding to a pool. To investigate.
-        if (localDB.active) {
-            await localDB.saveJson(elem.getJson())
-        }
         for (const property in jsonObject) {
             if (property.startsWith("_")) {
                 continue
             }
-            elem.setProperty(property, jsonObject[property]);
+            if (property.endsWith("Id")) {
+                const prop = property.slice(0, -2);
+                if (Array.isArray(jsonObject[property])) {
+                    // TODO: Members is too specific of an example here.
+                    const members = jsonObject[property].map((id: string) => this.pool.get(id));
+                    elem.setProperty(prop, new Collection());
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    members.forEach((member: any) => (elem as any)[prop].push(member));
+                } else {
+                    const foreignO = this.pool.get(jsonObject[property]);
+                    elem.setProperty(prop, foreignO)
+                }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                elem.setProperty(prop, (elem as any)[prop]);
+            } else {
+                elem.setProperty(property, jsonObject[property]);
+            }
         }
-
-        // // NB: This approach doesn't work well when modifying the root it seems.
-        // // To update top references, I need to support that lazy sorting I
-        // // was talkign about. Let's try a user.
-        // elem.delete(true);
-        // await this.pool.addFromJson(jsonObject);
+        this.pool.add(elem);
+        // Save it after we're done modifying elem
+        if (localDB.active) {
+            await localDB.saveJson(elem.getJson())
+        }
 
         break;
       }

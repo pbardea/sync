@@ -10,6 +10,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./Root.tsx";
 import Settings from "./Settings.tsx";
 import { Trip } from "./models/trip.ts";
+import { Trips } from "./Trips.tsx";
 
 // Startup
 await ObjectPool.init(mainApi);
@@ -38,7 +39,7 @@ const router = createBrowserRouter([
         path: "/trips",
         element: (
             <Root>
-                <App />
+                <Trips />
             </Root>
         ),
     },
