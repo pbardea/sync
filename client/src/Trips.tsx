@@ -1,99 +1,86 @@
-"use client";
-
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-
 import { useContext } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Home } from "@/models/home";
 import { observer } from "mobx-react";
 import { PoolContext } from "@/main";
-import { User } from "./models/user";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from "@/components/ui/form";
+import { ScrollArea } from "@radix-ui/react-scroll-area";
+import { ScrollBar } from "./components/ui/scroll-area";
+import { Separator } from "@radix-ui/react-select";
+import { cn } from "./lib/utils";
+import { NewTripButton } from "./components/new-trip-button";
 
-const FormSchema = z.object({
-    user_id: z.string({
-        required_error: "Please select an user to display.",
-    }),
-});
+interface CustomImageProps {
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    className?: string;
+}
+
+function Image({ src, alt, width, height, className }: CustomImageProps) {
+    return (
+        <div
+            className={cn(
+                "relative overflow-hidden transition-all hover:scale-105",
+                "aspect-[3/4]",
+                className,
+            )}
+            style={{ width, height }}
+        >
+            <img src={src} alt={alt} className="h-full w-full object-cover" />
+        </div>
+    );
+}
 
 export const Trips = observer(() => {
     const pool = useContext(PoolContext);
     const home = pool.getRoot as Home;
-    const trip = home.members.find((x) => x.trips.length > 0)!.trips.get(0);
-
-    const form = useForm<z.infer<typeof FormSchema>>({
-        resolver: zodResolver(FormSchema),
-    });
-
-    function onSubmit(data: z.infer<typeof FormSchema>) {
-        const member = trip.members.items.find((m: User) => m.id === data.user_id);
-        if (member === undefined) {
-            const userToAdd = home.members.find((m: User) => m.id === data.user_id)!;
-            trip.members.push(userToAdd);
-        } else {
-            if (trip.members.length === 1) {
-                return;
-            }
-            trip.members.delete(member);
-        }
-        trip.save();
-    }
+    const currentUser = home.members.find((x) => x.name === "Paul Bardea");
+    const trips = currentUser?.trips.items ?? [];
 
     return (
-        <>
-            <h1>{trip.name}</h1>
-            <h2>{trip.members?.items.map((m: User) => m.name)}</h2>
-            <Form {...form}>
-                <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="w-2/3 space-y-6"
-                >
-                    <FormField
-                        control={form.control}
-                        name="user_id"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Email</FormLabel>
-                                <Select
-                                    onValueChange={field.onChange}
-                                    defaultValue={field.value}
-                                >
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select a verified email to display" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {home.members.map((m: User) => (
-                                            <SelectItem key={m.id} value={m.id}>
-                                                {m.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <Button type="submit">Toggle</Button>
-                </form>
-            </Form>
-        </>
+        <div style={{ padding: 35 }}>
+            <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
+                Ahoy, {currentUser?.name.split(" ")[0]}
+            </h1>
+            <div
+                className="flex items-center justify-between"
+                style={{ paddingTop: 35 }}
+            >
+                <div className="space-y-1">
+                    <h2 className="text-2xl font-semibold tracking-tight">My Trips</h2>
+                </div>
+                <NewTripButton />
+            </div>
+            <Separator className="my-4" />
+            <div className="relative">
+                <ScrollArea>
+                    <div className="flex space-x-4 pb-4">
+                        {trips.map((trip) => (
+                            <div key={trip.id}>
+                                <div className="overflow-hidden rounded-md">
+                                    <Image
+                                        src={trip.headlinePicture ?? ""}
+                                        alt={trip.name}
+                                        width={250}
+                                        height={330}
+                                        className={cn(
+                                            "h-auto w-auto object-cover transition-all hover:scale-105",
+                                            "aspect-[3/4]",
+                                        )}
+                                    />
+                                </div>
+                                <div className="space-y-10 text-sm" style={{ paddingTop: 4 }}>
+                                    <h3 className="font-medium leading-none">{trip.name}</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        {trip.subHeading}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+            </div>
+        </div>
     );
 });

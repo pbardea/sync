@@ -1,8 +1,11 @@
 import { v4 } from "uuid";
-import { ClientModel, ManyToMany, Model, Property } from "./slib/base";
+import { ClientModel, ManyToMany, Model, OneToMany, Property } from "./slib/base";
 import { makeObservable, observable } from "mobx";
 import { User } from "./user";
 import { Collection } from "./slib/collection";
+import { TripCity } from "./trip_city";
+
+type TripStatus = "planning" | "in_progress" | "completed";
 
 @ClientModel("Trip")
 export class Trip extends Model {
@@ -14,6 +17,39 @@ export class Trip extends Model {
     @observable
     @ManyToMany("trips")
     public accessor members = new Collection<User>();
+
+    @observable
+    @Property()
+    public accessor description: string = "";
+    
+    @observable
+    @Property()
+    public accessor subHeading: string = "";
+
+    @observable
+    @Property()
+    public accessor startDate: Date | undefined;
+
+    @observable
+    @Property()
+    public accessor endDate: Date | undefined;
+
+    @observable
+    @Property()
+    public accessor headlinePicture: string | undefined;
+
+    @observable
+    @Property()
+    public accessor status: TripStatus | undefined;
+
+    @observable
+    @OneToMany("trip")
+    public accessor attractions: undefined;
+
+    // TODO: Consider collection? Only really required for many to many operations.
+    @observable
+    @OneToMany("trip")
+    public accessor cities: TripCity[] = [];
 
     constructor(id = v4()) {
         super(id);
