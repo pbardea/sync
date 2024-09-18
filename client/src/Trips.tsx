@@ -7,6 +7,7 @@ import { ScrollBar } from "./components/ui/scroll-area";
 import { Separator } from "@radix-ui/react-select";
 import { cn } from "./lib/utils";
 import { NewTripButton } from "./components/new-trip-button";
+import { Link } from "react-router-dom";
 
 interface CustomImageProps {
     src: string;
@@ -16,7 +17,7 @@ interface CustomImageProps {
     className?: string;
 }
 
-function Image({ src, alt, width, height, className }: CustomImageProps) {
+export function Image({ src, alt, width, height, className }: CustomImageProps) {
     return (
         <div
             className={cn(
@@ -53,10 +54,10 @@ export const Trips = observer(() => {
             </div>
             <Separator className="my-4" />
             <div className="relative">
-                <ScrollArea>
-                    <div className="flex space-x-4 pb-4">
+                <ScrollArea className="w-full overflow-hidden">
+                    <div className="flex flex-wrap gap-4">
                         {trips.map((trip) => (
-                            <div key={trip.id}>
+                            <Link key={trip.id} to={`/trips/${trip.id}`}>
                                 <div className="overflow-hidden rounded-md">
                                     <Image
                                         src={trip.headlinePicture ?? ""}
@@ -69,16 +70,16 @@ export const Trips = observer(() => {
                                         )}
                                     />
                                 </div>
-                                <div className="space-y-10 text-sm" style={{ paddingTop: 4 }}>
+                                <div className="space-y-1 text-sm" style={{ paddingTop: 4 }}>
                                     <h3 className="font-medium leading-none">{trip.name}</h3>
                                     <p className="text-xs text-muted-foreground">
                                         {trip.subHeading}
                                     </p>
                                 </div>
-                            </div>
+                            </Link>
                         ))}
                     </div>
-                    <ScrollBar orientation="horizontal" />
+                    <ScrollBar orientation="horizontal" className="hidden" />
                 </ScrollArea>
             </div>
         </div>

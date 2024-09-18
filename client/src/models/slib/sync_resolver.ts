@@ -101,6 +101,9 @@ export class SyncResolver {
         // references. This way if updates come in out of order we're not
         // dependent on that.
         if (this.pool.get(jsonObject["id"]) !== undefined) {
+            if (localDB.active) {
+                await localDB.saveJson(jsonObject);
+            }
           // Record is already created so we have a more up to date record.
           return;
         }

@@ -13,7 +13,14 @@ export function topologicalSort(objects: JsonModel[]): JsonModel[] {
     for (const key in obj) {
       if (key.endsWith("Id")) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        dependencies[obj.id].add((obj as any)[key]);
+        const depIds = (obj as any)[key];
+        if (depIds instanceof Array) {
+          for (const depId of depIds) {
+            dependencies[obj.id].add(depId);
+          }
+        } else {
+          dependencies[obj.id].add(depIds);
+        }
       }
     }
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogHeader,
     DialogTitle,
@@ -24,9 +25,17 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, PlusCircle } from "lucide-react";
+import { CalendarIcon, PlusCircle, X } from "lucide-react";
+import { Trip } from "@/models/trip";
+import { Home } from "@/models/home";
+import { PoolContext } from "@/main";
+import { Collection } from "@/models/slib/collection";
 
 export function NewTripButton() {
+    const pool = useContext(PoolContext);
+    const home = pool.getRoot as Home;
+    const currentUser = home.members.find((x) => x.name === "Paul Bardea")!;
+
     const [open, setOpen] = useState(false);
     const [startDate, setStartDate] = useState<Date>();
     const [endDate, setEndDate] = useState<Date>();
@@ -35,7 +44,19 @@ export function NewTripButton() {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         const tripData = Object.fromEntries(formData.entries());
-        console.log("New trip data:", { ...tripData, startDate, endDate });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const finalData: Record<string, any> = { ...tripData, startDate, endDate };
+        console.log("New trip data:", finalData);
+        const trip = new Trip();
+        trip.name = finalData.tripName;
+        trip.subHeading = finalData.subHeading;
+        trip.status = finalData.status;
+        trip.startDate = finalData.startDate;
+        trip.endDate = finalData.endDate;
+        trip.headlinePicture = finalData.headlinePicture;
+        trip.members = new Collection();
+        trip.members.push(currentUser);
+        trip.save();
         // Here you would typically send this data to your backend
         setOpen(false);
     };
@@ -49,6 +70,10 @@ export function NewTripButton() {
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Create New Trip</DialogTitle>
+                        <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+                            <X className="h-4 w-4" />
+                            <span className="sr-only">Close</span>
+                        </DialogClose>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
@@ -112,6 +137,10 @@ export function NewTripButton() {
                             <Input id="subHeading" name="subHeading" />
                         </div>
                         <div className="space-y-2">
+                            <Label htmlFor="headlinePicture">Headline Pictures</Label>
+                            <Input id="headlinePicture" name="headlinePicture" />
+                        </div>
+                        <div className="space-y-2">
                             <Label htmlFor="status">Status</Label>
                             <Select name="status" defaultValue="Planning">
                                 <SelectTrigger>
@@ -123,15 +152,6 @@ export function NewTripButton() {
                                     <SelectItem value="Complete">Complete</SelectItem>
                                 </SelectContent>
                             </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="headlinePicture">Headline Picture</Label>
-                            <Input
-                                id="headlinePicture"
-                                name="headlinePicture"
-                                type="file"
-                                accept="image/*"
-                            />
                         </div>
                         <Button type="submit" className="w-full">
                             Create Trip

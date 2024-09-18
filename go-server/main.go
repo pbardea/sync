@@ -361,7 +361,16 @@ func insertObject(db *sql.DB, object string, model map[string]interface{}) error
 		}
 		props = append(props, fmt.Sprintf(`"%s"`, prop))
 		placeholders = append(placeholders, fmt.Sprintf("$%d", len(placeholders)+1))
-		values = append(values, value)
+		if arr, ok := value.([]interface{}); ok {
+			// If value is []interface{}, JSON stringify it
+			jsonValue, err := json.Marshal(arr)
+			if err != nil {
+				return err
+			}
+			values = append(values, string(jsonValue))
+		} else {
+			values = append(values, value)
+		}
 	}
 
 	queryText := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, strings.ToLower(object), strings.Join(props, ", "), strings.Join(placeholders, ", "))
@@ -530,21 +539,29 @@ func handleChange(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		obj, err := getObjectAsJson(db, modelType, id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		changeToBroadcast := fmt.Sprintf(`{"type": "%s", "jsonObject": %s}`, changeType, obj)
-
-		broadcastChange(changeToBroadcast)
-
 		jsonStr, err := json.Marshal(obj)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		changeObj := map[string]interface{}{
+			"type":       changeType,
+			"jsonObject": obj,
+		}
+		changeObjStr, err := json.Marshal(changeObj)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
+		// Implement logic to apply a change to the data model
+		broadcastChange(string(changeObjStr))
 		w.Write([]byte(jsonStr))
 	case "delete":
 		if err := deleteObject(db, modelType, id); err != nil {

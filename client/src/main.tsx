@@ -11,6 +11,7 @@ import Root from "./Root.tsx";
 import Settings from "./Settings.tsx";
 import { Trip } from "./models/trip.ts";
 import { Trips } from "./Trips.tsx";
+import { TripDetail } from "./TripDetail.tsx";
 
 // Startup
 await ObjectPool.init(mainApi);
@@ -40,6 +41,14 @@ const router = createBrowserRouter([
         element: (
             <Root>
                 <Trips />
+            </Root>
+        ),
+    },
+    {
+        path: "/trips/:tripId",
+        element: (
+            <Root>
+                <TripDetail />
             </Root>
         ),
     },

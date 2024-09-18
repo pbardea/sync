@@ -82,6 +82,7 @@ export class ObjectPool {
                     const members = json[key].map((id: string) => this.pool[id]);
                     o[prop] = new Collection();
                     members.forEach((member: any) => o[prop].push(member));
+                    members.forEach((member: any) => this.pool[member.id] = member);
                 } else {
                     const foreignO = this.pool[json[key]];
                     o[prop] = foreignO;
