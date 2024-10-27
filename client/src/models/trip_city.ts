@@ -2,6 +2,7 @@ import { v4 } from "uuid";
 import { ClientModel, ManyToOne, Model, OneToMany, Property } from "./slib/base";
 import { makeObservable, observable } from "mobx";
 import { Trip } from "./trip";
+import { UserAttraction } from "./user_attraction";
 
 @ClientModel("TripCity")
 export class TripCity extends Model {
@@ -43,7 +44,7 @@ export class TripCity extends Model {
 
     @observable
     @OneToMany("city")
-    public accessor attractions: undefined;
+    public accessor attractions: UserAttraction[] = [];
 
     constructor(id = v4()) {
         super(id);

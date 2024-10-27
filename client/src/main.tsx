@@ -16,6 +16,7 @@ import { TripCity } from "./models/trip_city.ts";
 import { UserAttraction } from "./models/user_attraction.ts";
 import { FactAttraction } from "./models/fact_attraction.ts";
 import { TripCityDetail } from "./TripCityDetail.tsx";
+import { TripAttractionDetail } from "./TripAttractionDetail.tsx";
 
 // Startup
 await ObjectPool.init(mainApi);
@@ -65,6 +66,14 @@ const router = createBrowserRouter([
         element: (
             <Root>
                 <TripCityDetail />
+            </Root>
+        ),
+    },
+    {
+        path: "/trips/:tripId/attractions/:attractionId",
+        element: (
+            <Root>
+                <TripAttractionDetail />
             </Root>
         ),
     },

@@ -18,6 +18,10 @@ export class FactAttraction extends Model {
 
     @observable
     @Property()
+    accessor subtitle: string = "";
+
+    @observable
+    @Property()
     accessor description: string = "";
 
     @observable
@@ -53,7 +57,7 @@ export class FactAttraction extends Model {
     accessor pictures: string[] = [];
 
     @observable
-    @OneToMany("factAttractions")
+    @OneToMany("factAttraction")
     accessor userAttractions: UserAttraction[] = [];
 
     constructor(id = v4()) {

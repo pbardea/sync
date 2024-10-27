@@ -9,7 +9,7 @@ import { Trip } from "./trip";
 export class UserAttraction extends Model {
     @observable
     @Property()
-    accessor nameOverride: string = "";
+    accessor nameOverride: string | undefined;
 
     @observable
     @ManyToOne("userAttractions")

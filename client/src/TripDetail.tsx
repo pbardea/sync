@@ -67,43 +67,17 @@ export const TripDetail = observer(() => {
             </div>
             <ScrollArea className="w-full">
               <div className="flex flex-row gap-4 mb-4">
-                {[
-                  {
-                    title: "Onsen in Gunma",
-                    desc: "Relaxing all-inclusive onsen",
-                    photo:
-                      "https://pub-fc61908ba44c457791086752af654063.r2.dev/gunma.png",
-                  },
-                  {
-                    title: "Golden Pavilion",
-                    desc: "Historic cultural classic",
-                    photo:
-                      "https://pub-fc61908ba44c457791086752af654063.r2.dev/kyoto.png",
-                  },
-                  {
-                    title: "Kumamoto Castle",
-                    desc: "Historic castle",
-                    photo:
-                      "https://pub-fc61908ba44c457791086752af654063.r2.dev/kumamoto.png",
-                  },
-                  {
-                    title: "A-Bomb Dome",
-                    desc: "Directly under the hypocenter",
-                    photo:
-                      "https://pub-fc61908ba44c457791086752af654063.r2.dev/hiroshima.png",
-                  },
-                  {
-                    title: "Glitch Coffee Ginza",
-                    desc: "Specialty beans, dedicated service",
-                    photo:
-                      "https://pub-fc61908ba44c457791086752af654063.r2.dev/tokyo.png",
-                  },
-                ].map((item, index) => (
-                  <Link key={index} to={"#"}>
+                {(trip?.attractions ?? []).map((attraction) => ({
+                  id: attraction.id,
+                  title: attraction.name,
+                  desc: attraction.factAttraction?.subtitle ?? "",
+                  photo: attraction.pictures[0] ?? "",
+                })).map((attraction, index) => (
+                  <Link key={index} to={`/trips/${tripId}/attractions/${attraction.id}`}>
                     <div className="overflow-hidden rounded-md">
                       <Image
-                        src={item.photo ?? ""}
-                        alt={item.title}
+                        src={attraction.photo ?? ""}
+                        alt={attraction.title}
                         width={250}
                         height={330}
                         className={cn(
@@ -116,9 +90,9 @@ export const TripDetail = observer(() => {
                       className="space-y-1 text-sm"
                       style={{ paddingTop: 4 }}
                     >
-                      <h3 className="font-medium leading-none">{item.title}</h3>
+                      <h3 className="font-medium leading-none">{attraction.title}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {item.desc}
+                        {attraction.desc}
                       </p>
                     </div>
                   </Link>
@@ -252,7 +226,7 @@ export const TripDetail = observer(() => {
                     url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
                   />
                   <MarkerClusterGroup>
-                    {arcades.features.map((arcade, index) => (
+                    {arcades.features.map((arcade) => (
                       <Marker
                         key={arcade.properties["@id"]}
                         position={[
