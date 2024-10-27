@@ -36,7 +36,7 @@ export const TripCityDetail = observer(() => {
     });
 
     return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 pt-8">
             <div className="mb-4">
                 <h1 className="text-4xl font-bold mb-2">{city?.name}</h1>
                 <nav aria-label="Breadcrumb" className="max-w-lg">
@@ -100,11 +100,10 @@ export const TripCityDetail = observer(() => {
                         {city?.userDescription}
                     </p>
                     <MapContainer
-                        className="full-width-map mt-4"
                         center={[city?.lat, city?.lon]}
                         zoom={city?.zoomLevel}
-                        minZoom={3}
-                        maxZoom={19}
+                        minZoom={1}
+                        maxZoom={18}
                         zoomControl={true}
                         scrollWheelZoom={true}>
                         <TileLayer

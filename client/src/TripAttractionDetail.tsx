@@ -17,6 +17,12 @@ import { AttractionCard } from "./components/AttractionCard"
 import { AttractionMarker } from './components/AttractionMarker'
 import { AttractionInfo } from "./components/AttractionInfo"
 import { PhotoGallery } from "./components/PhotoGallery"
+import 'leaflet-gesture-handling/dist/leaflet-gesture-handling.css';
+import { GestureHandling } from 'leaflet-gesture-handling';
+import L from 'leaflet';
+import MarkerClusterGroup from "react-leaflet-cluster"
+
+L.Map.addInitHook('addHandler', 'gestureHandling', GestureHandling);
 
 export const TripAttractionDetail = observer(() => {
   const { tripId, attractionId } = useParams();
@@ -33,8 +39,8 @@ export const TripAttractionDetail = observer(() => {
   });
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-4">
+    <div className="h-screen flex flex-col mx-auto container">
+      <div className="px-4 pt-8 pb-4">
         <h1 className="text-4xl font-bold mb-2">{attraction?.name}</h1>
         <nav aria-label="Breadcrumb" className="max-w-lg">
           <ol className="flex items-center text-gray-500 text-sm">
@@ -64,9 +70,52 @@ export const TripAttractionDetail = observer(() => {
           </ol>
         </nav>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 h-[calc(100vh-12rem)] overflow-y-auto">
-          <ScrollArea className="h-full pr-6">
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden px-4">
+        {/* Fixed Left Sidebar - 1/3 width */}
+        <div className="w-1/3 pr-4 overflow-y-auto">
+          {attraction?.factAttraction?.description && (
+            <>
+              <h1 className="text-2xl font-bold mb-2">About</h1>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                {attraction.factAttraction.description}
+              </p>
+            </>
+          )}
+          <MapContainer
+            className="full-width-map mt-4"
+            center={[attraction?.factAttraction?.lat ?? 0, attraction?.factAttraction?.lon ?? 0]}
+            zoom={16}
+            minZoom={1}
+            maxZoom={18}
+            zoomControl={true}
+            scrollWheelZoom={true}
+            gestureHandling={true}
+          >
+            <TileLayer
+              url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+            />
+            <MarkerClusterGroup>
+              {attraction && (
+                <AttractionMarker
+                  attraction={attraction}
+                  isCurrentAttraction={true}
+                />
+              )}
+              {attractionsInCity.map((cityAttraction) => (
+                <AttractionMarker
+                  key={cityAttraction.id}
+                  attraction={cityAttraction}
+                />
+              ))}
+            </MarkerClusterGroup>
+          </MapContainer>
+        </div>
+
+        {/* Scrollable Right Content - 2/3 width */}
+        <div className="w-2/3">
+          <ScrollArea className="h-full pr-6 overflow-y-auto overscroll-contain">
             <h2 className="text-2xl font-semibold mb-4">{currentUser?.name.split(" ")[0]}'s Thoughts</h2>
             <div className="flex justify-between">
               <span className="text-sm text-gray-600 mr-4">
@@ -94,7 +143,7 @@ export const TripAttractionDetail = observer(() => {
                 <div className="space-y-4">
                   <div className="flex flex-col gap-1 mr-4">
                     {attractionsInCity.map((attraction) => (
-                      <AttractionCard 
+                      <AttractionCard
                         key={attraction.id}
                         attraction={attraction}
                         tripId={tripId ?? ""}
@@ -108,41 +157,7 @@ export const TripAttractionDetail = observer(() => {
             <ScrollBar orientation="vertical" />
           </ScrollArea>
         </div>
-        <div className="col-span-1 w-full sticky top-8">
-          {attraction?.factAttraction?.description && (
-            <>
-              <h1 className="text-2xl font-bold mb-2">About</h1>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                {attraction.factAttraction.description}
-              </p>
-            </>
-          )}
-          <MapContainer
-            className="full-width-map mt-4"
-            center={[attraction?.factAttraction?.lat ?? 0, attraction?.factAttraction?.lon ?? 0]}
-            zoom={16}
-            minZoom={3}
-            maxZoom={19}
-            zoomControl={true}
-            scrollWheelZoom={true}>
-            <TileLayer
-              url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
-            />
-            {attraction && (
-              <AttractionMarker 
-                attraction={attraction} 
-                isCurrentAttraction={true} 
-              />
-            )}
-            {attractionsInCity.map((cityAttraction) => (
-              <AttractionMarker
-                key={cityAttraction.id}
-                attraction={cityAttraction}
-              />
-            ))}
-          </MapContainer>
-        </div>
       </div>
-    </div >
+    </div>
   )
 });
