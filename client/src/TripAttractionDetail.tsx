@@ -65,8 +65,8 @@ export const TripAttractionDetail = observer(() => {
         </nav>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 mr-6">
-          <ScrollArea>
+        <div className="col-span-2 h-[calc(100vh-12rem)] overflow-y-auto">
+          <ScrollArea className="h-full pr-6">
             <h2 className="text-2xl font-semibold mb-4">{currentUser?.name.split(" ")[0]}'s Thoughts</h2>
             <div className="flex justify-between">
               <span className="text-sm text-gray-600 mr-4">
@@ -108,7 +108,7 @@ export const TripAttractionDetail = observer(() => {
             <ScrollBar orientation="vertical" />
           </ScrollArea>
         </div>
-        <div className="col-span-1 w-full">
+        <div className="col-span-1 w-full sticky top-8">
           {attraction?.factAttraction?.description && (
             <>
               <h1 className="text-2xl font-bold mb-2">About</h1>
@@ -119,7 +119,7 @@ export const TripAttractionDetail = observer(() => {
           )}
           <MapContainer
             className="full-width-map mt-4"
-            center={[attraction?.factAttraction?.lat, attraction?.factAttraction?.lon]}
+            center={[attraction?.factAttraction?.lat ?? 0, attraction?.factAttraction?.lon ?? 0]}
             zoom={16}
             minZoom={3}
             maxZoom={19}

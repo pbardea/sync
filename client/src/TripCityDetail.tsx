@@ -9,16 +9,15 @@ import { PoolContext } from "./main"
 import { TripCity } from "./models/trip_city"
 
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { MapContainer, TileLayer } from 'react-leaflet'
 import { ScrollArea } from "@radix-ui/react-scroll-area"
 import { ScrollBar } from "./components/ui/scroll-area"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./components/ui/card"
 import { AttractionFilterComponent, RatingFilter } from "./components/attraction-filter"
 import MarkerClusterGroup from "react-leaflet-cluster"
-import { Button } from "./components/ui/button"
 import { CreateAttractionButton } from "./components/CreateAttractionButton"
 import { AttractionCard } from "./components/AttractionCard"
 import { AttractionMarker } from './components/AttractionMarker'
+import { PhotoGallery } from "./components/PhotoGallery"
 
 export const TripCityDetail = observer(() => {
     const { tripId, cityId } = useParams();
@@ -60,8 +59,8 @@ export const TripCityDetail = observer(() => {
                 </nav>
             </div>
             <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                    <ScrollArea>
+                <div className="col-span-2 h-[calc(100vh-12rem)] overflow-y-auto">
+                    <ScrollArea className="h-full pr-6">
                         <h2 className="text-2xl font-semibold mb-4">{currentUser?.name.split(" ")[0]}'s Thoughts</h2>
                         <span className="text-sm text-gray-600">
                             <b>Local Festivities:</b> Experience breathtaking foliage at Ohori Park and Maizuru Park for stunning fall colors.<br />
@@ -71,6 +70,7 @@ export const TripCityDetail = observer(() => {
                             <b>Relax:</b> Unwind at hot springs in Beppu or Yufuin for a serene retreat from city buzz.<br />
                             <b>Festivals:</b> Check out local festivals like Hakata Dontaku during your visit for a vibrant cultural experience.<br />
                         </span>
+                        <PhotoGallery photos_urls={city.attractions.flatMap((x) => x.pictures[0])} />
                         <h2 className="text-2xl font-semibold mb-4 mt-4">Attractions</h2>
                         <div className="flex space-x-4 mb-4 items-center justify-between">
                             <div className="flex space-x-4">

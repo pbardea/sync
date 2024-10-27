@@ -21,6 +21,7 @@ import { Trip } from "./models/trip";
 import { Home } from "./models/home";
 import { PoolContext } from "./main";
 import TripBlog from "./TripBlog";
+import { AttractionMarker } from "./components/AttractionMarker";
 
 export const TripDetail = observer(() => {
   const { tripId } = useParams();
@@ -28,6 +29,8 @@ export const TripDetail = observer(() => {
   const home = pool.getRoot as Home;
   const currentUser = home.members.find((x) => x.name === "Paul Bardea");
   const trip = currentUser?.trips.items.find((x: Trip) => x.id === tripId);
+
+  const attractions = trip?.attractions;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -111,7 +114,7 @@ export const TripDetail = observer(() => {
               </div>
             </div>
             <ScrollArea className="w-full">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="flex flex-row gap-4 mb-4">
                 {trip?.cities.map((city, index) => (
                   <Link key={index} to={`/trips/${tripId}/cities/${city.id}`}>
                     <div className="overflow-hidden rounded-md">
@@ -150,45 +153,17 @@ export const TripDetail = observer(() => {
               <RatingFilter />
             </div>
             <div className="grid grid-cols-3 gap-8">
-              <div className="space-y-4 h-[50vh]">
+              <div className="space-y-4 h-[80vh]">
                 <ScrollArea className="h-full">
                   <div className="flex flex-col gap-1 mr-4">
-                    {[
-                      {
-                        name: "%ARABICA Arashiyama",
-                        desc: "A cafe with a view",
-                      },
-                      {
-                        name: "Coffee Glitch Ginza",
-                        desc: "Popular coffee spot with specialty beans",
-                      },
-                      { name: "Hakata Issou", desc: "美味しいラーメン" },
-                      {
-                        name: "%ARABICA Arashiyama",
-                        desc: "A cafe with a view",
-                      },
-                      {
-                        name: "Coffee Glitch Ginza",
-                        desc: "Popular coffee spot with specialty beans",
-                      },
-                      { name: "Hakata Issou", desc: "美味しいラーメン" },
-                      {
-                        name: "%ARABICA Arashiyama",
-                        desc: "A cafe with a view",
-                      },
-                      {
-                        name: "Coffee Glitch Ginza",
-                        desc: "Popular coffee spot with specialty beans",
-                      },
-                      { name: "Hakata Issou", desc: "美味しいラーメン" },
-                    ].map((attraction, index) => (
+                    {attractions?.map((attraction, index) => (
                       <Card key={index} className="mb-4">
                         <CardHeader>
                           <CardTitle className="text-sm">
                             {attraction.name}
                           </CardTitle>
                           <p className="text-xs text-gray-500">
-                            {attraction.desc}
+                            {attraction.factAttraction?.subtitle}
                           </p>
                         </CardHeader>
                         <CardContent>
@@ -212,7 +187,7 @@ export const TripDetail = observer(() => {
                   className="full-height-map"
                   center={[38, 139.69222]}
                   zoom={6}
-                  zoomControl={false}
+                  zoomControl={true}
                   minZoom={3}
                   maxZoom={19}
                   maxBounds={[
@@ -226,20 +201,11 @@ export const TripDetail = observer(() => {
                     url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
                   />
                   <MarkerClusterGroup>
-                    {arcades.features.map((arcade) => (
-                      <Marker
-                        key={arcade.properties["@id"]}
-                        position={[
-                          arcade.geometry.coordinates[1],
-                          arcade.geometry.coordinates[0],
-                        ]}
-                      >
-                        <Popup>
-                          {arcade.properties.name}
-                          <br />
-                          {arcade.properties["name:en"]}
-                        </Popup>
-                      </Marker>
+                    {attractions?.map((attraction) => (
+                      <AttractionMarker
+                        key={attraction.id}
+                        attraction={attraction}
+                      />
                     ))}
                   </MarkerClusterGroup>
                 </MapContainer>
