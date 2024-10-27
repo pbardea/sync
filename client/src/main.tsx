@@ -12,12 +12,20 @@ import Settings from "./Settings.tsx";
 import { Trip } from "./models/trip.ts";
 import { Trips } from "./Trips.tsx";
 import { TripDetail } from "./TripDetail.tsx";
+import { TripCity } from "./models/trip_city.ts";
+import { UserAttraction } from "./models/user_attraction.ts";
+import { FactAttraction } from "./models/fact_attraction.ts";
+import { TripCityDetail } from "./TripCityDetail.tsx";
 
 // Startup
 await ObjectPool.init(mainApi);
 User.init();
 Home.init();
 Trip.init();
+TripCity.init();
+UserAttraction.init();
+FactAttraction.init();
+
 try {
     await mainApi.login("pbardea", "password");
 } catch (e) {
@@ -49,6 +57,14 @@ const router = createBrowserRouter([
         element: (
             <Root>
                 <TripDetail />
+            </Root>
+        ),
+    },
+    {
+        path: "/trips/:tripId/cities/:cityId",
+        element: (
+            <Root>
+                <TripCityDetail />
             </Root>
         ),
     },

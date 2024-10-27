@@ -1,7 +1,7 @@
-import { makeObservable, observable } from "mobx";
+import { computed, makeObservable, observable } from "mobx";
 import { ClientModel, ManyToOne, Model, Property } from "./slib/base";
 import { v4 } from "uuid";
-import { AttractionType } from "./fact_attraction";
+import { AttractionType, FactAttraction } from "./fact_attraction";
 import { TripCity } from "./trip_city";
 import { Trip } from "./trip";
 
@@ -10,6 +10,10 @@ export class UserAttraction extends Model {
     @observable
     @Property()
     accessor nameOverride: string = "";
+
+    @observable
+    @ManyToOne("userAttractions")
+    accessor factAttraction: FactAttraction | undefined;
 
     @observable
     @Property()
@@ -34,6 +38,11 @@ export class UserAttraction extends Model {
     @observable
     @Property()
     accessor pictures: string[] = [];
+
+    @computed
+    get name(): string {
+        return this.nameOverride ?? this.factAttraction?.name ?? "";
+    }
 
     constructor(id = v4()) {
         super(id);

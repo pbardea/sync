@@ -1,6 +1,7 @@
 import { v4 } from "uuid";
-import { ClientModel, Model, Property } from "./slib/base";
+import { ClientModel, Model, OneToMany, Property } from "./slib/base";
 import { makeObservable, observable } from "mobx";
+import { UserAttraction } from "./user_attraction";
 
 export type AttractionType = "cafe" | "restaurant" | "hotel" | "attraction";
 
@@ -50,6 +51,10 @@ export class FactAttraction extends Model {
     @observable
     @Property()
     accessor pictures: string[] = [];
+
+    @observable
+    @OneToMany("factAttractions")
+    accessor userAttractions: UserAttraction[] = [];
 
     constructor(id = v4()) {
         super(id);

@@ -179,30 +179,31 @@ func getRowsAsJson(rows *sql.Rows, object string) ([]map[string]interface{}, err
 		data := make(map[string]interface{})
 		data["__class"] = strings.ToUpper(object[:1]) + object[1:]
 		for i, v := range values {
-			fmt.Printf("%T\n", v)
 			if v == nil {
 				continue
 			}
-			// TODO: Clean up
-			if "int64" == fmt.Sprintf("%T", v) {
+
+			switch v := v.(type) {
+			case int64, float64, time.Time:
 				data[columns[i]] = v
-			} else if "time.Time" == fmt.Sprintf("%T", v) {
-				data[columns[i]] = v
-			} else if "[]uint8" == fmt.Sprintf("%T", v) {
-				var jsonThing interface{}
-				json.Unmarshal([]byte(v.([]uint8)), &jsonThing)
-				data[columns[i]] = jsonThing
-			} else {
-				x := v.(string)
-				if nx, ok := strconv.ParseFloat(string(x), 64); ok == nil {
-					data[columns[i]] = nx
-				} else if b, ok := strconv.ParseBool(string(x)); ok == nil {
-					data[columns[i]] = b
-				} else if "string" == fmt.Sprintf("%T", string(x)) {
-					data[columns[i]] = string(x)
+			case []uint8:
+				var jsonValue interface{}
+				if err := json.Unmarshal(v, &jsonValue); err == nil {
+					data[columns[i]] = jsonValue
 				} else {
-					fmt.Printf("Failed on if for type %T of %v\n", x, x)
+					data[columns[i]] = string(v)
 				}
+			case string:
+				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					data[columns[i]] = f
+				} else if b, err := strconv.ParseBool(v); err == nil {
+					data[columns[i]] = b
+				} else {
+					data[columns[i]] = v
+				}
+			default:
+				log.Printf("Unexpected type for column %s: %T", columns[i], v)
+				data[columns[i]] = fmt.Sprintf("%v", v)
 			}
 		}
 		dataArr = append(dataArr, data)
@@ -256,7 +257,7 @@ func handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
 
-	objectsToBootstrap := []string{"Home", "User", "Trip"}
+	objectsToBootstrap := []string{"Home", "User", "Trip", "TripCity", "FactAttraction", "UserAttraction"}
 	for _, object := range objectsToBootstrap {
 		if dataArr, err := writeObject(db, object); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -301,7 +302,7 @@ func handleDeltaBootstrap(w http.ResponseWriter, r *http.Request) {
 	// TODO: Filter this down for permissions. Also worth an RFD.
 	finalArr := make([]map[string]interface{}, 0)
 
-	objectsToBootstrap := []string{"Home", "User", "Trip"}
+	objectsToBootstrap := []string{"Home", "User", "Trip", "TripCity", "FactAttraction", "UserAttraction"}
 	for _, object := range objectsToBootstrap {
 		if dataArr, err := writeObjectDelta(db, object, &start); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

@@ -43,18 +43,13 @@ export const Trips = observer(() => {
             <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">
                 Ahoy, {currentUser?.name.split(" ")[0]}
             </h1>
-            <div
-                className="flex items-center justify-between"
-                style={{ paddingTop: 35 }}
-            >
-                <div className="space-y-1">
-                    <h2 className="text-2xl font-semibold tracking-tight">My Trips</h2>
-                </div>
+            <div className="flex items-center justify-between" style={{ paddingTop: 35 }}>
+                <h2 className="text-2xl font-semibold tracking-tight">My Trips</h2>
                 <NewTripButton />
             </div>
             <Separator className="my-4" />
             <div className="relative">
-                <ScrollArea className="w-full overflow-hidden">
+                <ScrollArea className="w-full">
                     <div className="flex flex-wrap gap-4">
                         {trips.map((trip) => (
                             <Link key={trip.id} to={`/trips/${trip.id}`}>
@@ -79,7 +74,7 @@ export const Trips = observer(() => {
                             </Link>
                         ))}
                     </div>
-                    <ScrollBar orientation="horizontal" className="hidden" />
+                    <ScrollBar orientation="horizontal" />
                 </ScrollArea>
             </div>
         </div>

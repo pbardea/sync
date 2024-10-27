@@ -11,7 +11,7 @@ export class TripCity extends Model {
 
     @observable
     @ManyToOne("cities")
-    trip: Trip | undefined = undefined;
+    public accessor trip: Trip | undefined;
 
     @observable
     @Property()

@@ -51,7 +51,7 @@ export function AttractionFilter({ title, options }: AttractionFilterProps) {
                 {selectedValues.size}
               </Badge>
               <div className="hidden space-x-1 lg:flex">
-                {selectedValues.size > 2 ? (
+                {selectedValues.size > 5 ? (
                   <Badge
                     variant="secondary"
                     className="rounded-sm px-1 font-normal"
@@ -115,7 +115,7 @@ export function AttractionFilter({ title, options }: AttractionFilterProps) {
                 )
               })}
             </CommandGroup>
-            {selectedValues.size > 0 && (
+            {selectedValues.size > 0 ? (
               <>
                 <CommandSeparator />
                 <CommandGroup>
@@ -124,6 +124,18 @@ export function AttractionFilter({ title, options }: AttractionFilterProps) {
                     className="justify-center text-center"
                   >
                     Clear filters
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            ) : (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => setSelectedValues(new Set(options.map(option => option.value)))}
+                    className="justify-center text-center"
+                  >
+                    Select all
                   </CommandItem>
                 </CommandGroup>
               </>

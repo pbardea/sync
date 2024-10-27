@@ -14,7 +14,7 @@ class LocalDB {
         const instance = new LocalDB();
         try {
             // Setup connection to IndexDB.
-            instance.db = await openDB("sync_testing", 8, {
+            instance.db = await openDB("sync_testing", 9, {
                 upgrade(db) {
                     if (!db.objectStoreNames.contains("_transactions")) {
                         db.createObjectStore("_transactions", { keyPath: "id" });
@@ -30,6 +30,15 @@ class LocalDB {
                     }
                     if (!db.objectStoreNames.contains("Trip")) {
                         db.createObjectStore("Trip", { keyPath: "id" });
+                    }
+                    if (!db.objectStoreNames.contains("TripCity")) {
+                        db.createObjectStore("TripCity", { keyPath: "id" });
+                    }
+                    if (!db.objectStoreNames.contains("UserAttraction")) {
+                        db.createObjectStore("UserAttraction", { keyPath: "id" });
+                    }
+                    if (!db.objectStoreNames.contains("FactAttraction")) {
+                        db.createObjectStore("FactAttraction", { keyPath: "id" });
                     }
                 },
             });
@@ -89,7 +98,7 @@ class LocalDB {
             throw new Error("DB not initialized");
         }
         const all = [];
-        const objs = ["User", "Home", "Trip"];
+        const objs = ["User", "Home", "Trip", "TripCity", "UserAttraction", "FactAttraction"];
         for (const obj of objs) {
             const a = await this.db.getAll(obj);
             all.push(...a);
