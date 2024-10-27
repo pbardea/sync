@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
-import { Attraction } from "../models/attraction";
 import { AttractionInfo } from "./AttractionInfo";
+import { UserAttraction } from "@/models/user_attraction";
 
 interface AttractionCardProps {
-    attraction: Attraction;
+    attraction: UserAttraction;
     tripId: string;
     cityName: string;
 }
@@ -23,9 +23,9 @@ export function AttractionCard({ attraction, tripId, cityName }: AttractionCardP
                         <div className="flex-1">
                             {attraction.factAttraction?.description}
                         </div>
-                        {attraction.factAttraction?.pictures[0] && (
+                        {attraction.pictures[0] && (
                             <img
-                                src={attraction.factAttraction.pictures[0]}
+                                src={attraction.pictures[0]}
                                 alt={attraction.name}
                                 className="w-[140px] h-[140px] object-cover rounded-md flex-shrink-0"
                             />

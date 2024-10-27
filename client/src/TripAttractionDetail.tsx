@@ -65,7 +65,7 @@ export const TripAttractionDetail = observer(() => {
         </nav>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
+        <div className="col-span-2 mr-6">
           <ScrollArea>
             <h2 className="text-2xl font-semibold mb-4">{currentUser?.name.split(" ")[0]}'s Thoughts</h2>
             <div className="flex justify-between">
