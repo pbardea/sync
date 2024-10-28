@@ -6,9 +6,9 @@ interface AttractionUserInfoProps {
     compact?: boolean;
 }
 
-export function AttractionUserInfo({ type, waitTime = "1h", rating = "Great", cityName }: AttractionUserInfoProps) {
+export function AttractionUserInfo({ type, waitTime = "1h", rating = "Great", cityName, compact = false }: AttractionUserInfoProps) {
     return (
-        <div className="font-mono text-xs">
+        <div className={`font-mono ${compact ? "text-xs" : ""}`}>
             <table>
                 <tbody>
                     <tr>

@@ -26,6 +26,71 @@ import { PageHeader } from "./components/layouts/PageHeader";
 import { TwoColumnLayout } from "./components/layouts/TwoColumnLayout"
 import { Clock, Globe, Instagram, MapPin } from "lucide-react"
 
+const AttractionDetails = ({ attraction, compact = false }: { attraction: UserAttraction | undefined, compact?: boolean }) => {
+  return (
+    <div className={`font-mono ${compact ? "text-xs" : ""}`}>
+      <table>
+        <tbody>
+          {attraction?.factAttraction?.website && (
+            <tr>
+              <td className="pr-4 align-top">
+                <Globe className="h-4 w-4" />
+              </td>
+              <td>
+                <a href={attraction.factAttraction.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  {attraction.factAttraction.website}
+                </a>
+              </td>
+            </tr>
+          )}
+          
+          {attraction?.factAttraction?.instagram && (
+            <tr>
+              <td className="pr-4 align-top">
+                <Instagram className="h-4 w-4" />
+              </td>
+              <td>
+                <a href={`https://instagram.com/${attraction.factAttraction.instagram}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  @{attraction.factAttraction.instagram}
+                </a>
+              </td>
+            </tr>
+          )}
+
+          {attraction?.factAttraction?.address && (
+            <tr>
+              <td className="pr-4 align-top">
+                <MapPin className="h-4 w-4" />
+              </td>
+              <td>
+                <a 
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.factAttraction.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  {attraction.factAttraction.address}
+                </a>
+              </td>
+            </tr>
+          )}
+
+          {attraction?.factAttraction?.hours && (
+            <tr>
+              <td className="pr-4 align-top">
+                <Clock className="h-4 w-4" />
+              </td>
+              <td>
+                {attraction.factAttraction.hours}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 export const TripAttractionDetail = observer(() => {
   const { tripId, attractionId } = useParams();
   const pool = useContext(PoolContext);
@@ -64,11 +129,14 @@ export const TripAttractionDetail = observer(() => {
           </p>
         </>
       )}
-      <AttractionUserInfo
-        type={attraction?.factAttraction?.type}
-        rating={attraction?.rating?.toString()}
-        cityName={attraction?.city?.name ?? ""}
-      />
+      <div className="flex justify-between">
+        <AttractionUserInfo
+          type={attraction?.factAttraction?.type}
+          cityName={attraction?.city?.name ?? ""}
+          compact={true}
+        />
+        <AttractionDetails attraction={attraction} compact={true} />
+      </div>
       <MapContainer
         className="full-width-map mt-4"
         center={[attraction?.factAttraction?.lat ?? 0, attraction?.factAttraction?.lon ?? 0]}
@@ -94,41 +162,6 @@ export const TripAttractionDetail = observer(() => {
           />
         ))}
       </MapContainer>
-      <div className="mt-8 mb-8 font-mono text-sm">
-        {attraction?.factAttraction?.website && (
-          <div className="flex items-center gap-2 mb-2">
-            <Globe className="h-4 w-4" />
-            <a href={attraction.factAttraction.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
-              {attraction.factAttraction.website}
-            </a>
-          </div>
-        )}
-        
-        {attraction?.factAttraction?.instagram && (
-          <div className="flex items-center gap-2 mb-2">
-            <Instagram className="h-4 w-4" />
-            <a href={`https://instagram.com/${attraction.factAttraction.instagram}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-              @{attraction.factAttraction.instagram}
-            </a>
-          </div>
-        )}
-
-        {attraction?.factAttraction?.address && (
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin className="h-4 w-4" />
-            <span>{attraction.factAttraction.address}</span>
-          </div>
-        )}
-
-        {attraction?.factAttraction?.hours && (
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            <div className="flex flex-col">
-              {attraction.factAttraction.hours}
-            </div>
-          </div>
-        )}
-      </div>
     </>
   );
 

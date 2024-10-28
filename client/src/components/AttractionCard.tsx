@@ -62,7 +62,7 @@ export function AttractionCard({ attraction, tripId, compact = false, onClick, o
                     <AttractionUserInfo
                         type={attraction.factAttraction?.type}
                         cityName={attraction.city?.name ?? ""}
-                        compact={compact}
+                        compact={true}
                     />
                     <Link to={`/trips/${tripId}/attractions/${attraction.id}`} className="flex items-center">
                         <Button variant="outline" size="sm">
