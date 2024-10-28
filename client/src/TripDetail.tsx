@@ -13,9 +13,9 @@ import {
 } from "./components/attraction-filter";
 
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer } from "react-leaflet";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
-import { useContext } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Trip } from "./models/trip";
 import { Home } from "./models/home";
 import { PoolContext } from "./main";
@@ -26,9 +26,27 @@ import { AttractionMarker } from "./components/AttractionMarker";
 import 'leaflet-gesture-handling/dist/leaflet-gesture-handling.css';
 import { GestureHandling } from 'leaflet-gesture-handling';
 import L from 'leaflet';
+import { AttractionCard } from "./components/AttractionCard";
+import { UserAttraction } from "./models/user_attraction";
 
 // Add this line before your component
 L.Map.addInitHook('addHandler', 'gestureHandling', GestureHandling);
+
+function ChangeView({ attractions, selectedAttraction }: any) {
+  const map = useMap();
+  
+  if (selectedAttraction) {
+    map.setView([selectedAttraction.factAttraction?.lat, selectedAttraction.factAttraction?.lon], 16);
+    return null;
+  }
+  
+  let markerBounds = L.latLngBounds([]);
+  attractions.forEach((attraction: any) => {
+      markerBounds.extend([attraction.factAttraction?.lat, attraction.factAttraction?.lon])
+  })
+  map.fitBounds(markerBounds)   // <===== Error: Bounds are not valid.
+  return null;
+}
 
 export const TripDetail = observer(() => {
   const { tripId } = useParams();
@@ -37,7 +55,26 @@ export const TripDetail = observer(() => {
   const currentUser = home.members.find((x) => x.name === "Paul Bardea");
   const trip = currentUser?.trips.items.find((x: Trip) => x.id === tripId);
 
-  const attractions = trip?.attractions;
+  if (!trip) {
+    return <div>Trip not found</div>;
+  }
+
+  const [selectedAttraction, setSelectedAttraction] = useState<UserAttraction | null>(null);
+
+  const attractions = useMemo(() => trip?.attractions.slice().sort((a, b) => (a.city?.name ?? '').localeCompare(b.city?.name ?? '')), [trip?.attractions]);
+
+  const selectAttraction = (attractionId: string) => {
+    if (selectedAttraction && selectedAttraction.id === attractionId) {
+      setSelectedAttraction(null);
+    } else {
+      setSelectedAttraction(attractions.find(a => a.id === attractionId) ?? null);
+    }
+  }
+
+  const [hoveredAttraction, setHoveredAttraction] = useState<UserAttraction | null>(null);
+  const hoverAttraction = (attractionId: string | null) => {
+    setHoveredAttraction(attractions.find(a => a.id === attractionId) ?? null);
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -164,26 +201,7 @@ export const TripDetail = observer(() => {
                 <ScrollArea className="h-full">
                   <div className="flex flex-col gap-1 mr-4">
                     {attractions?.map((attraction, index) => (
-                      <Card key={index} className="mb-4">
-                        <CardHeader>
-                          <CardTitle className="text-sm">
-                            {attraction.name}
-                          </CardTitle>
-                          <p className="text-xs text-gray-500">
-                            {attraction.factAttraction?.subtitle}
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex justify-between text-xs">
-                            <span>Type: Cafe</span>
-                            <span>Wait time: 1h</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span>Rating: Great</span>
-                            <span>City: Tokyo</span>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <AttractionCard key={index} attraction={attraction} tripId={trip.id} compact={true} onClick={selectAttraction} onHover={hoverAttraction} isSelected={selectedAttraction?.id === attraction.id} />
                     ))}
                   </div>
                   <ScrollBar orientation="vertical" />
@@ -192,27 +210,19 @@ export const TripDetail = observer(() => {
               <div className="lg:col-span-2">
                 <MapContainer
                   className="full-height-map"
-                  center={[38, 139.69222]}
-                  zoom={6}
-                  zoomControl={true}
-                  minZoom={1}
-                  maxZoom={18}
-                  maxBounds={[
-                    [-85.06, -180],
-                    [85.06, 180],
-                  ]}
-                  scrollWheelZoom={false}
                   gestureHandling={true}
                 >
                   <TileLayer
                     attribution='&copy; <a href="https://stadiamaps.com/" target="_blank">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
                     url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
                   />
-                  <MarkerClusterGroup>
+                  <ChangeView attractions={attractions} selectedAttraction={selectedAttraction} />
+                  <MarkerClusterGroup maxClusterRadius={!!hoveredAttraction ? 0 : 0}>
                     {attractions?.map((attraction) => (
                       <AttractionMarker
                         key={attraction.id}
                         attraction={attraction}
+                        isCurrentAttraction={!!((selectedAttraction && selectedAttraction.id === attraction.id) || (hoveredAttraction && hoveredAttraction.id === attraction.id))}
                       />
                     ))}
                   </MarkerClusterGroup>
@@ -225,3 +235,4 @@ export const TripDetail = observer(() => {
     </div>
   );
 });
+

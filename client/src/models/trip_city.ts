@@ -28,7 +28,7 @@ export class TripCity extends Model {
 
     @observable
     @Property()
-    public accessor about: string | undefined;
+    public accessor thoughts: string | undefined;
 
     @observable
     @Property()
